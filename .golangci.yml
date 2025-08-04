@@ -1,0 +1,115 @@
+# golangci-lint configuration
+# Full reference at https://golangci-lint.run/usage/configuration/
+
+version: "2"
+
+run:
+  # Timeout for analysis
+  timeout: 5m
+
+  # Build tags
+  build-tags:
+    - integration
+
+# Configure specific linters
+linters:
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - misspell
+    - revive
+    - unconvert
+    - unparam
+    - cyclop
+    - gocognit
+    - gosec
+    - asciicheck
+    - bodyclose
+    - durationcheck
+    - errorlint
+    - exhaustive
+    - makezero
+    - nilerr
+    - noctx
+    - predeclared
+    - tparallel
+    - whitespace
+
+  # Exclusions configuration
+  exclusions:
+    # Exclude paths from linting
+    paths:
+      - "vendor/.*"
+
+    # Exclude specific linters from test files
+    rules:
+      # Ignore noctx errors in test files
+      - path: '(.+)_test\.go'
+        linters:
+          - noctx
+
+      # Ignore var-naming in pkg/utils (generic utils package)
+      - path: "pkg/utils/"
+        linters:
+          - revive
+        text: "var-naming:"
+
+  # Linter-specific settings
+  settings:
+    cyclop:
+      # Cyclomatic complexity threshold (default is 10, higher is more complex)
+      max-complexity: 20
+
+    gocognit:
+      # Cognitive complexity threshold (default is 30, higher is more complex)
+      min-complexity: 30
+
+    errcheck:
+      # Report about assignment of errors to blank identifier
+      check-blank: true
+
+      # List of functions to exclude from checking
+      exclude-functions:
+        - io/ioutil.ReadFile
+        - io.Copy(*bytes.Buffer)
+        - io.Copy(os.Stdout)
+
+    govet:
+      # Enable shadow check
+      enable:
+        - shadow
+
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+          arguments:
+            # Ignore warnings about `task.Task` and `flow.Flow` etc (even though its a good idea not to "stutter")
+            - disableStutteringCheck
+        - name: if-return
+        - name: increment-decrement
+        - name: var-naming
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: unexported-return
+        - name: indent-error-flow
+        - name: errorf
+
+    misspell:
+      locale: US
+
+# Configure formatters
+formatters:
+  enable:
+    - gofumpt

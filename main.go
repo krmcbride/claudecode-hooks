@@ -1,3 +1,4 @@
+// Package main implements a Claude Code hook to block potentially destructive bash commands.
 package main
 
 import (
@@ -37,43 +38,35 @@ func analyzeCommand(command string) (bool, []string) {
 		case *syntax.CallExpr:
 			// Check if this is a command call
 			if len(n.Args) > 0 {
-				if word, ok := n.Args[0].(*syntax.Word); ok {
-					cmd := wordToString(word)
+				cmd := wordToString(n.Args[0])
 
-					// Check for git push patterns
-					if cmd == "git" && len(n.Args) > 1 {
-						if word2, ok := n.Args[1].(*syntax.Word); ok {
-							arg := wordToString(word2)
-							if arg == "push" {
-								hasGitPush = true
-								issues = append(issues, "Detected 'git push' command")
-							}
+				// Check for git push patterns
+				if cmd == "git" && len(n.Args) > 1 {
+					arg := wordToString(n.Args[1])
+					if arg == "push" {
+						hasGitPush = true
+						issues = append(issues, "Detected 'git push' command")
+					}
+				}
+
+				// Check for command substitution containing git push
+				if cmd == "bash" || cmd == "sh" {
+					for _, arg := range n.Args[1:] {
+						argStr := wordToString(arg)
+						if strings.Contains(argStr, "git") && strings.Contains(argStr, "push") {
+							hasGitPush = true
+							issues = append(issues, "Detected 'git push' in subshell")
 						}
 					}
+				}
 
-					// Check for command substitution containing git push
-					if cmd == "bash" || cmd == "sh" {
-						for _, arg := range n.Args[1:] {
-							if word, ok := arg.(*syntax.Word); ok {
-								argStr := wordToString(word)
-								if strings.Contains(argStr, "git") && strings.Contains(argStr, "push") {
-									hasGitPush = true
-									issues = append(issues, "Detected 'git push' in subshell")
-								}
-							}
-						}
-					}
-
-					// Check other dangerous patterns
-					if cmd == "eval" || cmd == "exec" {
-						for _, arg := range n.Args[1:] {
-							if word, ok := arg.(*syntax.Word); ok {
-								argStr := wordToString(word)
-								if strings.Contains(argStr, "git") && strings.Contains(argStr, "push") {
-									hasGitPush = true
-									issues = append(issues, fmt.Sprintf("Detected 'git push' in %s", cmd))
-								}
-							}
+				// Check other dangerous patterns
+				if cmd == "eval" || cmd == "exec" {
+					for _, arg := range n.Args[1:] {
+						argStr := wordToString(arg)
+						if strings.Contains(argStr, "git") && strings.Contains(argStr, "push") {
+							hasGitPush = true
+							issues = append(issues, fmt.Sprintf("Detected 'git push' in %s", cmd))
 						}
 					}
 				}
@@ -100,6 +93,9 @@ func analyzeCommand(command string) (bool, []string) {
 
 // Convert Word node to string (simplified)
 func wordToString(word *syntax.Word) string {
+	if word == nil {
+		return ""
+	}
 	var result strings.Builder
 	for _, part := range word.Parts {
 		switch p := part.(type) {
