@@ -1,5 +1,5 @@
 // Package common provides shared functionality for Claude Code hooks.
-package common
+package common //nolint:revive // Package name 'common' is appropriate for shared utilities
 
 import (
 	"encoding/json"
@@ -26,9 +26,9 @@ func ReadHookInput() (*HookInput, error) {
 
 // BlockExecution blocks the command execution with an error message
 func BlockExecution(message string, issues []string) {
-	os.Stderr.WriteString("🚫 BLOCKED: " + message + "\n")
+	_, _ = os.Stderr.WriteString("🚫 BLOCKED: " + message + "\n") //nolint:errcheck // Error writing to stderr is not actionable in blocking function
 	for _, issue := range issues {
-		os.Stderr.WriteString("Issue: " + issue + "\n")
+		_, _ = os.Stderr.WriteString("Issue: " + issue + "\n") //nolint:errcheck // Error writing to stderr is not actionable in blocking function
 	}
 	os.Exit(2) // Block execution
 }
