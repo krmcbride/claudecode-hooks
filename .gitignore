@@ -1,1 +1,5 @@
 .direnv/
+
+# Build and binary directories
+build/
+bin/

@@ -1,12 +1,14 @@
 # Go Claude Code Hook Project Makefile
 
 # Project configuration
-BINARY_NAME := krmcbride-claude-hook
-MAIN_PACKAGE := .
 BIN_DIR := bin
 BUILD_DIR := build
 HOOK_DIR := .claude/hooks
 USER_HOOK_DIR := $(or $(CLAUDE_CONFIG_DIR),$(HOME)/.claude)/hooks
+
+# Hook definitions (name:package)
+HOOKS := git-block:cmd/git-block aws-block:cmd/aws-block kubectl-block:cmd/kubectl-block
+HOOK_BINARIES := $(foreach hook,$(HOOKS),krmcbride-$(word 1,$(subst :, ,$(hook))))
 
 # Tool versions (pinned)
 GOLANGCI_LINT_VERSION := v2.3.1
@@ -58,11 +60,37 @@ clean-tools: ## Remove all installed tools
 	@printf "$(GREEN)✓ Tools removed$(NC)\n"
 
 .PHONY: build
-build: ## Build the binary
-	@printf "$(YELLOW)Building $(BINARY_NAME)...$(NC)\n"
+build: ## Build all hook binaries
+	@printf "$(YELLOW)Building all hooks...$(NC)\n"
 	@mkdir -p $(BUILD_DIR)
-	@go build -ldflags="-w -s" -o $(BUILD_DIR)/$(BINARY_NAME) $(MAIN_PACKAGE)
-	@printf "$(GREEN)✓ Built $(BUILD_DIR)/$(BINARY_NAME)$(NC)\n"
+	@$(foreach hook,$(HOOKS), \
+		printf "$(YELLOW)Building krmcbride-$(word 1,$(subst :, ,$(hook)))...$(NC)\n"; \
+		go build -ldflags="-w -s" -o $(BUILD_DIR)/krmcbride-$(word 1,$(subst :, ,$(hook))) ./$(word 2,$(subst :, ,$(hook))) || exit 1; \
+		printf "$(GREEN)✓ Built $(BUILD_DIR)/krmcbride-$(word 1,$(subst :, ,$(hook)))$(NC)\n"; \
+	)
+	@printf "$(GREEN)✓ All hooks built$(NC)\n"
+
+# Individual hook build targets
+.PHONY: build-git-block
+build-git-block: ## Build git-block hook
+	@printf "$(YELLOW)Building krmcbride-git-block...$(NC)\n"
+	@mkdir -p $(BUILD_DIR)
+	@go build -ldflags="-w -s" -o $(BUILD_DIR)/krmcbride-git-block ./cmd/git-block
+	@printf "$(GREEN)✓ Built $(BUILD_DIR)/krmcbride-git-block$(NC)\n"
+
+.PHONY: build-aws-block
+build-aws-block: ## Build aws-block hook
+	@printf "$(YELLOW)Building krmcbride-aws-block...$(NC)\n"
+	@mkdir -p $(BUILD_DIR)
+	@go build -ldflags="-w -s" -o $(BUILD_DIR)/krmcbride-aws-block ./cmd/aws-block
+	@printf "$(GREEN)✓ Built $(BUILD_DIR)/krmcbride-aws-block$(NC)\n"
+
+.PHONY: build-kubectl-block
+build-kubectl-block: ## Build kubectl-block hook
+	@printf "$(YELLOW)Building krmcbride-kubectl-block...$(NC)\n"
+	@mkdir -p $(BUILD_DIR)
+	@go build -ldflags="-w -s" -o $(BUILD_DIR)/krmcbride-kubectl-block ./cmd/kubectl-block
+	@printf "$(GREEN)✓ Built $(BUILD_DIR)/krmcbride-kubectl-block$(NC)\n"
 
 .PHONY: test
 test: ## Run tests
@@ -94,26 +122,73 @@ check: fmt lint test ## Run all checks (format, lint, test)
 	@printf "$(GREEN)✓ All checks passed$(NC)\n"
 
 .PHONY: install
-install: build ## Install the hook binary to project .claude/hooks/ directory
-	@printf "$(YELLOW)Installing $(BINARY_NAME) hook to project...$(NC)\n"
+install: build ## Install all hook binaries to project .claude/hooks/ directory
+	@printf "$(YELLOW)Installing all hooks to project...$(NC)\n"
 	@mkdir -p $(HOOK_DIR)
-	@cp $(BUILD_DIR)/$(BINARY_NAME) $(HOOK_DIR)/$(BINARY_NAME)
-	@chmod +x $(HOOK_DIR)/$(BINARY_NAME)
-	@printf "$(GREEN)✓ Installed $(BINARY_NAME) to $(HOOK_DIR)/$(NC)\n"
+	@$(foreach hook,$(HOOKS), \
+		cp $(BUILD_DIR)/krmcbride-$(word 1,$(subst :, ,$(hook))) $(HOOK_DIR)/krmcbride-$(word 1,$(subst :, ,$(hook))); \
+		chmod +x $(HOOK_DIR)/krmcbride-$(word 1,$(subst :, ,$(hook))); \
+		printf "$(GREEN)✓ Installed krmcbride-$(word 1,$(subst :, ,$(hook))) to $(HOOK_DIR)/$(NC)\n"; \
+	)
 
 .PHONY: install-user
-install-user: build ## Install the hook binary to user ~/.claude/hooks/ directory
-	@printf "$(YELLOW)Installing $(BINARY_NAME) hook to user config...$(NC)\n"
+install-user: build ## Install all hook binaries to user ~/.claude/hooks/ directory
+	@printf "$(YELLOW)Installing all hooks to user config...$(NC)\n"
 	@mkdir -p $(USER_HOOK_DIR)
-	@cp $(BUILD_DIR)/$(BINARY_NAME) $(USER_HOOK_DIR)/$(BINARY_NAME)
-	@chmod +x $(USER_HOOK_DIR)/$(BINARY_NAME)
-	@printf "$(GREEN)✓ Installed $(BINARY_NAME) to $(USER_HOOK_DIR)/$(NC)\n"
+	@$(foreach hook,$(HOOKS), \
+		cp $(BUILD_DIR)/krmcbride-$(word 1,$(subst :, ,$(hook))) $(USER_HOOK_DIR)/krmcbride-$(word 1,$(subst :, ,$(hook))); \
+		chmod +x $(USER_HOOK_DIR)/krmcbride-$(word 1,$(subst :, ,$(hook))); \
+		printf "$(GREEN)✓ Installed krmcbride-$(word 1,$(subst :, ,$(hook))) to $(USER_HOOK_DIR)/$(NC)\n"; \
+	)
 
-.PHONY: install-global
-install-global: build ## Install the binary to $GOPATH/bin for global use
-	@printf "$(YELLOW)Installing $(BINARY_NAME) globally...$(NC)\n"
-	@go install .
-	@printf "$(GREEN)✓ Installed $(BINARY_NAME) to $$(go env GOPATH)/bin$(NC)\n"
+# Individual hook install targets
+.PHONY: install-git-block
+install-git-block: build-git-block ## Install git-block hook to project
+	@printf "$(YELLOW)Installing krmcbride-git-block to project...$(NC)\n"
+	@mkdir -p $(HOOK_DIR)
+	@cp $(BUILD_DIR)/krmcbride-git-block $(HOOK_DIR)/krmcbride-git-block
+	@chmod +x $(HOOK_DIR)/krmcbride-git-block
+	@printf "$(GREEN)✓ Installed krmcbride-git-block to $(HOOK_DIR)/$(NC)\n"
+
+.PHONY: install-user-git-block
+install-user-git-block: build-git-block ## Install git-block hook to user config
+	@printf "$(YELLOW)Installing krmcbride-git-block to user config...$(NC)\n"
+	@mkdir -p $(USER_HOOK_DIR)
+	@cp $(BUILD_DIR)/krmcbride-git-block $(USER_HOOK_DIR)/krmcbride-git-block
+	@chmod +x $(USER_HOOK_DIR)/krmcbride-git-block
+	@printf "$(GREEN)✓ Installed krmcbride-git-block to $(USER_HOOK_DIR)/$(NC)\n"
+
+.PHONY: install-aws-block
+install-aws-block: build-aws-block ## Install aws-block hook to project
+	@printf "$(YELLOW)Installing krmcbride-aws-block to project...$(NC)\n"
+	@mkdir -p $(HOOK_DIR)
+	@cp $(BUILD_DIR)/krmcbride-aws-block $(HOOK_DIR)/krmcbride-aws-block
+	@chmod +x $(HOOK_DIR)/krmcbride-aws-block
+	@printf "$(GREEN)✓ Installed krmcbride-aws-block to $(HOOK_DIR)/$(NC)\n"
+
+.PHONY: install-user-aws-block
+install-user-aws-block: build-aws-block ## Install aws-block hook to user config
+	@printf "$(YELLOW)Installing krmcbride-aws-block to user config...$(NC)\n"
+	@mkdir -p $(USER_HOOK_DIR)
+	@cp $(BUILD_DIR)/krmcbride-aws-block $(USER_HOOK_DIR)/krmcbride-aws-block
+	@chmod +x $(USER_HOOK_DIR)/krmcbride-aws-block
+	@printf "$(GREEN)✓ Installed krmcbride-aws-block to $(USER_HOOK_DIR)/$(NC)\n"
+
+.PHONY: install-kubectl-block
+install-kubectl-block: build-kubectl-block ## Install kubectl-block hook to project
+	@printf "$(YELLOW)Installing krmcbride-kubectl-block to project...$(NC)\n"
+	@mkdir -p $(HOOK_DIR)
+	@cp $(BUILD_DIR)/krmcbride-kubectl-block $(HOOK_DIR)/krmcbride-kubectl-block
+	@chmod +x $(HOOK_DIR)/krmcbride-kubectl-block
+	@printf "$(GREEN)✓ Installed krmcbride-kubectl-block to $(HOOK_DIR)/$(NC)\n"
+
+.PHONY: install-user-kubectl-block
+install-user-kubectl-block: build-kubectl-block ## Install kubectl-block hook to user config
+	@printf "$(YELLOW)Installing krmcbride-kubectl-block to user config...$(NC)\n"
+	@mkdir -p $(USER_HOOK_DIR)
+	@cp $(BUILD_DIR)/krmcbride-kubectl-block $(USER_HOOK_DIR)/krmcbride-kubectl-block
+	@chmod +x $(USER_HOOK_DIR)/krmcbride-kubectl-block
+	@printf "$(GREEN)✓ Installed krmcbride-kubectl-block to $(USER_HOOK_DIR)/$(NC)\n"
 
 .PHONY: mod-tidy
 mod-tidy: ## Tidy go modules
@@ -135,20 +210,61 @@ clean: ## Clean build artifacts
 	@printf "$(GREEN)✓ Cleaned$(NC)\n"
 
 .PHONY: uninstall
-uninstall: ## Remove installed project hook
-	@printf "$(YELLOW)Removing project hook...$(NC)\n"
-	@rm -f $(HOOK_DIR)/$(BINARY_NAME)
-	@printf "$(GREEN)✓ Project hook removed$(NC)\n"
+uninstall: ## Remove all installed project hooks
+	@printf "$(YELLOW)Removing all project hooks...$(NC)\n"
+	@$(foreach hook,$(HOOKS), \
+		rm -f $(HOOK_DIR)/krmcbride-$(word 1,$(subst :, ,$(hook))); \
+		printf "$(GREEN)✓ Removed krmcbride-$(word 1,$(subst :, ,$(hook))) from $(HOOK_DIR)/$(NC)\n"; \
+	)
 
 .PHONY: uninstall-user
-uninstall-user: ## Remove installed user hook
-	@printf "$(YELLOW)Removing user hook...$(NC)\n"
-	@rm -f $(USER_HOOK_DIR)/$(BINARY_NAME)
-	@printf "$(GREEN)✓ User hook removed$(NC)\n"
+uninstall-user: ## Remove all installed user hooks
+	@printf "$(YELLOW)Removing all user hooks...$(NC)\n"
+	@$(foreach hook,$(HOOKS), \
+		rm -f $(USER_HOOK_DIR)/krmcbride-$(word 1,$(subst :, ,$(hook))); \
+		printf "$(GREEN)✓ Removed krmcbride-$(word 1,$(subst :, ,$(hook))) from $(USER_HOOK_DIR)/$(NC)\n"; \
+	)
 
 .PHONY: uninstall-all
-uninstall-all: uninstall uninstall-user ## Remove all installed hooks
+uninstall-all: uninstall uninstall-user ## Remove all installed hooks (project and user)
 	@printf "$(GREEN)✓ All hooks removed$(NC)\n"
+
+# Individual hook uninstall targets
+.PHONY: uninstall-git-block
+uninstall-git-block: ## Remove git-block hook from project
+	@printf "$(YELLOW)Removing krmcbride-git-block from project...$(NC)\n"
+	@rm -f $(HOOK_DIR)/krmcbride-git-block
+	@printf "$(GREEN)✓ Removed krmcbride-git-block$(NC)\n"
+
+.PHONY: uninstall-user-git-block
+uninstall-user-git-block: ## Remove git-block hook from user config
+	@printf "$(YELLOW)Removing krmcbride-git-block from user config...$(NC)\n"
+	@rm -f $(USER_HOOK_DIR)/krmcbride-git-block
+	@printf "$(GREEN)✓ Removed krmcbride-git-block$(NC)\n"
+
+.PHONY: uninstall-aws-block
+uninstall-aws-block: ## Remove aws-block hook from project
+	@printf "$(YELLOW)Removing krmcbride-aws-block from project...$(NC)\n"
+	@rm -f $(HOOK_DIR)/krmcbride-aws-block
+	@printf "$(GREEN)✓ Removed krmcbride-aws-block$(NC)\n"
+
+.PHONY: uninstall-user-aws-block
+uninstall-user-aws-block: ## Remove aws-block hook from user config
+	@printf "$(YELLOW)Removing krmcbride-aws-block from user config...$(NC)\n"
+	@rm -f $(USER_HOOK_DIR)/krmcbride-aws-block
+	@printf "$(GREEN)✓ Removed krmcbride-aws-block$(NC)\n"
+
+.PHONY: uninstall-kubectl-block
+uninstall-kubectl-block: ## Remove kubectl-block hook from project
+	@printf "$(YELLOW)Removing krmcbride-kubectl-block from project...$(NC)\n"
+	@rm -f $(HOOK_DIR)/krmcbride-kubectl-block
+	@printf "$(GREEN)✓ Removed krmcbride-kubectl-block$(NC)\n"
+
+.PHONY: uninstall-user-kubectl-block
+uninstall-user-kubectl-block: ## Remove kubectl-block hook from user config
+	@printf "$(YELLOW)Removing krmcbride-kubectl-block from user config...$(NC)\n"
+	@rm -f $(USER_HOOK_DIR)/krmcbride-kubectl-block
+	@printf "$(GREEN)✓ Removed krmcbride-kubectl-block$(NC)\n"
 
 .PHONY: clean-all
 clean-all: clean clean-tools ## Clean everything (build artifacts and tools)
