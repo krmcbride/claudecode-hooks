@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/krmcbride-file-format -cmd \"make fmt-file FILE=\" -ext \".go\""
+          }
+        ]
+      }
+    ]
+  }
+}

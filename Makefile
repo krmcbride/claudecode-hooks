@@ -7,7 +7,7 @@ HOOK_DIR := .claude/hooks
 USER_HOOK_DIR := $(or $(CLAUDE_CONFIG_DIR),$(HOME)/.claude)/hooks
 
 # Hook definitions (name:package)
-HOOKS := git-block:cmd/git-block aws-block:cmd/aws-block kubectl-block:cmd/kubectl-block
+HOOKS := git-block:cmd/git-block aws-block:cmd/aws-block kubectl-block:cmd/kubectl-block file-format:cmd/file-format
 HOOK_BINARIES := $(foreach hook,$(HOOKS),krmcbride-$(word 1,$(subst :, ,$(hook))))
 
 # Tool versions (pinned)
@@ -114,8 +114,21 @@ lint: tools ## Run linter
 .PHONY: fmt
 fmt: tools ## Format code
 	@printf "$(YELLOW)Formatting code...$(NC)\n"
+	@$(BIN_DIR)/goimports-reviser -rm-unused -set-alias -format ./...
 	@$(BIN_DIR)/golangci-lint run --fix
 	@printf "$(GREEN)✓ Code formatted$(NC)\n"
+
+.PHONY: fmt-file
+fmt-file: tools ## Format a specific file (usage: make fmt-file FILE=path/to/file.go)
+	@if [ -z "$(FILE)" ]; then \
+		printf "$(RED)Error: FILE parameter is required$(NC)\n"; \
+		printf "Usage: make fmt-file FILE=path/to/file.go\n"; \
+		exit 1; \
+	fi
+	@printf "$(YELLOW)Formatting $(FILE)...$(NC)\n"
+	@$(BIN_DIR)/goimports-reviser -rm-unused -set-alias -format "$(FILE)"
+	@$(BIN_DIR)/golangci-lint run --fix "$(FILE)"
+	@printf "$(GREEN)✓ Formatted $(FILE)$(NC)\n"
 
 .PHONY: check
 check: fmt lint test ## Run all checks (format, lint, test)

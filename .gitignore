@@ -3,3 +3,5 @@
 # Build and binary directories
 build/
 bin/
+
+.claude/hooks/krmcbride-*
