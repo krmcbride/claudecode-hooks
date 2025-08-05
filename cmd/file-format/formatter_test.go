@@ -100,6 +100,19 @@ func TestFileFormatter_shouldProcessInput(t *testing.T) {
 			expected: true,
 		},
 		{
+			name: "Successful Write",
+			input: &hook.PostToolUseInput{
+				ToolName: "Write",
+				ToolResponse: struct {
+					FilePath string `json:"filePath,omitempty"`
+					Success  bool   `json:"success"`
+				}{
+					Success: true,
+				},
+			},
+			expected: true,
+		},
+		{
 			name: "Failed Edit",
 			input: &hook.PostToolUseInput{
 				ToolName: "Edit",
@@ -115,7 +128,7 @@ func TestFileFormatter_shouldProcessInput(t *testing.T) {
 		{
 			name: "Wrong tool",
 			input: &hook.PostToolUseInput{
-				ToolName: "Write",
+				ToolName: "Read",
 				ToolResponse: struct {
 					FilePath string `json:"filePath,omitempty"`
 					Success  bool   `json:"success"`
@@ -204,6 +217,22 @@ func TestFileFormatter_collectFilePaths(t *testing.T) {
 				},
 			},
 			expected: []string{"main.go", "utils.go"},
+		},
+		{
+			name: "Write with single file",
+			input: &hook.PostToolUseInput{
+				ToolName: "Write",
+				ToolInput: struct {
+					FilePath string `json:"file_path"`
+					Content  string `json:"content,omitempty"`
+					Edits    []struct {
+						FilePath string `json:"file_path"`
+					} `json:"edits,omitempty"`
+				}{
+					FilePath: "new_file.go",
+				},
+			},
+			expected: []string{"new_file.go"},
 		},
 		{
 			name: "Edit with empty file path",

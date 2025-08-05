@@ -85,7 +85,7 @@ func TestFileFormatter_ProcessInput_Integration(t *testing.T) {
 			name:      "Skip wrong tool",
 			formatter: NewFileFormatter("echo formatted", []string{".go"}, false),
 			input: &hook.PostToolUseInput{
-				ToolName: "Write",
+				ToolName: "Read",
 				ToolInput: struct {
 					FilePath string `json:"file_path"`
 					Content  string `json:"content,omitempty"`

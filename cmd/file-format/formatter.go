@@ -53,7 +53,7 @@ func (f *FileFormatter) shouldProcessInput(input *hook.PostToolUseInput) bool {
 	if !input.ToolResponse.Success {
 		return false
 	}
-	return input.ToolName == "Edit" || input.ToolName == "MultiEdit"
+	return input.ToolName == "Edit" || input.ToolName == "MultiEdit" || input.ToolName == "Write"
 }
 
 // getFilesToFormat collects and filters files to format
@@ -67,7 +67,7 @@ func (f *FileFormatter) collectFilePaths(input *hook.PostToolUseInput) []string 
 	var filePaths []string
 
 	switch input.ToolName {
-	case "Edit":
+	case "Edit", "Write":
 		if input.ToolInput.FilePath != "" {
 			filePaths = append(filePaths, input.ToolInput.FilePath)
 		}

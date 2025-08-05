@@ -2,7 +2,7 @@
   "hooks": {
     "PostToolUse": [
       {
-        "matcher": "Edit|MultiEdit",
+        "matcher": "Edit|MultiEdit|Write",
         "hooks": [
           {
             "type": "command",
