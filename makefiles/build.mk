@@ -2,7 +2,7 @@
 # This file contains all build and installation-related targets
 
 # Hook definitions (shared by build, install, and uninstall targets)
-HOOKS := git-block:cmd/git-block aws-block:cmd/aws-block kubectl-block:cmd/kubectl-block file-format:cmd/file-format
+HOOKS := bash-block:cmd/bash-block file-format:cmd/file-format
 
 ##@ Build
 
@@ -29,9 +29,7 @@ endef
 
 # Generate individual hook build targets
 # NOTE: When adding a new hook, add it to HOOKS above AND add an eval line below
-$(eval $(call hook-build-template,git-block,cmd/git-block))
-$(eval $(call hook-build-template,aws-block,cmd/aws-block))
-$(eval $(call hook-build-template,kubectl-block,cmd/kubectl-block))
+$(eval $(call hook-build-template,bash-block,cmd/bash-block))
 $(eval $(call hook-build-template,file-format,cmd/file-format))
 
 ##@ Installation
@@ -114,12 +112,8 @@ endef
 
 # Generate individual hook install and uninstall targets
 # NOTE: When adding a new hook, add it to HOOKS above AND add eval lines below
-$(eval $(call hook-install-template,git-block))
-$(eval $(call hook-install-template,aws-block))
-$(eval $(call hook-install-template,kubectl-block))
+$(eval $(call hook-install-template,bash-block))
 $(eval $(call hook-install-template,file-format))
 
-$(eval $(call hook-uninstall-template,git-block))
-$(eval $(call hook-uninstall-template,aws-block))
-$(eval $(call hook-uninstall-template,kubectl-block))
+$(eval $(call hook-uninstall-template,bash-block))
 $(eval $(call hook-uninstall-template,file-format))
