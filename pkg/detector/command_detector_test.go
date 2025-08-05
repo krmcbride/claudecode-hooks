@@ -333,18 +333,18 @@ func TestCommandDetector_IssueReporting(t *testing.T) {
 	}
 
 	detector := NewCommandDetector(rules, SecurityBasic, 10)
-	
+
 	// Test that issues are cleared between analyses
 	detector.AnalyzeCommand("git push")
 	firstIssues := len(detector.GetIssues())
-	
+
 	detector.AnalyzeCommand("git pull") // Should not add issues
 	secondIssues := len(detector.GetIssues())
-	
+
 	if secondIssues != 0 {
 		t.Errorf("Expected 0 issues after analyzing allowed command, got %d", secondIssues)
 	}
-	
+
 	if firstIssues == 0 {
 		t.Errorf("Expected issues for blocked command, got %d", firstIssues)
 	}
