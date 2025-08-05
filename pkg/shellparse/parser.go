@@ -1,5 +1,5 @@
-// Package common provides shared shell parsing utilities.
-package common //nolint:revive // Package name 'common' is appropriate for shared utilities
+// Package shellparse provides shell command parsing utilities.
+package shellparse
 
 import (
 	"fmt"

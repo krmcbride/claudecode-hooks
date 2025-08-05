@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/krmcbride/claudecode-hooks/pkg/common"
+	"github.com/krmcbride/claudecode-hooks/pkg/hook"
 )
 
 func TestParseExtensions(t *testing.T) {
@@ -70,12 +70,12 @@ func TestFileFormatter_shouldProcessInput(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		input    *common.PostToolUseInput
+		input    *hook.PostToolUseInput
 		expected bool
 	}{
 		{
 			name: "Successful Edit",
-			input: &common.PostToolUseInput{
+			input: &hook.PostToolUseInput{
 				ToolName: "Edit",
 				ToolResponse: struct {
 					FilePath string `json:"filePath,omitempty"`
@@ -88,7 +88,7 @@ func TestFileFormatter_shouldProcessInput(t *testing.T) {
 		},
 		{
 			name: "Successful MultiEdit",
-			input: &common.PostToolUseInput{
+			input: &hook.PostToolUseInput{
 				ToolName: "MultiEdit",
 				ToolResponse: struct {
 					FilePath string `json:"filePath,omitempty"`
@@ -101,7 +101,7 @@ func TestFileFormatter_shouldProcessInput(t *testing.T) {
 		},
 		{
 			name: "Failed Edit",
-			input: &common.PostToolUseInput{
+			input: &hook.PostToolUseInput{
 				ToolName: "Edit",
 				ToolResponse: struct {
 					FilePath string `json:"filePath,omitempty"`
@@ -114,7 +114,7 @@ func TestFileFormatter_shouldProcessInput(t *testing.T) {
 		},
 		{
 			name: "Wrong tool",
-			input: &common.PostToolUseInput{
+			input: &hook.PostToolUseInput{
 				ToolName: "Write",
 				ToolResponse: struct {
 					FilePath string `json:"filePath,omitempty"`
@@ -142,12 +142,12 @@ func TestFileFormatter_collectFilePaths(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		input    *common.PostToolUseInput
+		input    *hook.PostToolUseInput
 		expected []string
 	}{
 		{
 			name: "Edit with single file",
-			input: &common.PostToolUseInput{
+			input: &hook.PostToolUseInput{
 				ToolName: "Edit",
 				ToolInput: struct {
 					FilePath string `json:"file_path"`
@@ -163,7 +163,7 @@ func TestFileFormatter_collectFilePaths(t *testing.T) {
 		},
 		{
 			name: "MultiEdit with multiple files",
-			input: &common.PostToolUseInput{
+			input: &hook.PostToolUseInput{
 				ToolName: "MultiEdit",
 				ToolInput: struct {
 					FilePath string `json:"file_path"`
@@ -185,7 +185,7 @@ func TestFileFormatter_collectFilePaths(t *testing.T) {
 		},
 		{
 			name: "MultiEdit with duplicate files",
-			input: &common.PostToolUseInput{
+			input: &hook.PostToolUseInput{
 				ToolName: "MultiEdit",
 				ToolInput: struct {
 					FilePath string `json:"file_path"`
@@ -207,7 +207,7 @@ func TestFileFormatter_collectFilePaths(t *testing.T) {
 		},
 		{
 			name: "Edit with empty file path",
-			input: &common.PostToolUseInput{
+			input: &hook.PostToolUseInput{
 				ToolName: "Edit",
 				ToolInput: struct {
 					FilePath string `json:"file_path"`

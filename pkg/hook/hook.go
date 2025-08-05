@@ -1,5 +1,5 @@
-// Package common provides shared functionality for Claude Code hooks.
-package common //nolint:revive // Package name 'common' is appropriate for shared utilities
+// Package hook provides types and functions for Claude Code hooks.
+package hook
 
 import (
 	"encoding/json"

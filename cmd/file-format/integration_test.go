@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/krmcbride/claudecode-hooks/pkg/common"
+	"github.com/krmcbride/claudecode-hooks/pkg/hook"
 )
 
 func TestFileFormatter_ProcessInput_Integration(t *testing.T) {
@@ -29,14 +29,14 @@ func TestFileFormatter_ProcessInput_Integration(t *testing.T) {
 	tests := []struct {
 		name          string
 		formatter     *FileFormatter
-		input         *common.PostToolUseInput
+		input         *hook.PostToolUseInput
 		expectError   bool
 		expectedFiles []string
 	}{
 		{
 			name:      "Edit processing with echo command",
 			formatter: NewFileFormatter("echo formatted", []string{".go"}, false),
-			input: &common.PostToolUseInput{
+			input: &hook.PostToolUseInput{
 				ToolName: "Edit",
 				ToolInput: struct {
 					FilePath string `json:"file_path"`
@@ -60,7 +60,7 @@ func TestFileFormatter_ProcessInput_Integration(t *testing.T) {
 		{
 			name:      "Skip failed operation",
 			formatter: NewFileFormatter("echo formatted", []string{".go"}, false),
-			input: &common.PostToolUseInput{
+			input: &hook.PostToolUseInput{
 				ToolName: "Edit",
 				ToolInput: struct {
 					FilePath string `json:"file_path"`
@@ -84,7 +84,7 @@ func TestFileFormatter_ProcessInput_Integration(t *testing.T) {
 		{
 			name:      "Skip wrong tool",
 			formatter: NewFileFormatter("echo formatted", []string{".go"}, false),
-			input: &common.PostToolUseInput{
+			input: &hook.PostToolUseInput{
 				ToolName: "Write",
 				ToolInput: struct {
 					FilePath string `json:"file_path"`
@@ -108,7 +108,7 @@ func TestFileFormatter_ProcessInput_Integration(t *testing.T) {
 		{
 			name:      "Filter by extension",
 			formatter: NewFileFormatter("echo formatted", []string{".go"}, false),
-			input: &common.PostToolUseInput{
+			input: &hook.PostToolUseInput{
 				ToolName: "MultiEdit",
 				ToolInput: struct {
 					FilePath string `json:"file_path"`
@@ -138,7 +138,7 @@ func TestFileFormatter_ProcessInput_Integration(t *testing.T) {
 		{
 			name:      "No files to format",
 			formatter: NewFileFormatter("echo formatted", []string{".rs"}, false),
-			input: &common.PostToolUseInput{
+			input: &hook.PostToolUseInput{
 				ToolName: "Edit",
 				ToolInput: struct {
 					FilePath string `json:"file_path"`
@@ -162,7 +162,7 @@ func TestFileFormatter_ProcessInput_Integration(t *testing.T) {
 		{
 			name:      "Block on failure enabled",
 			formatter: NewFileFormatter("nonexistent-command-12345", []string{".go"}, true),
-			input: &common.PostToolUseInput{
+			input: &hook.PostToolUseInput{
 				ToolName: "Edit",
 				ToolInput: struct {
 					FilePath string `json:"file_path"`
@@ -235,7 +235,7 @@ func TestFileFormatter_ProcessInput_WithAllowedCommand(t *testing.T) {
 	// Use gofmt which should be available and allowed
 	formatter := NewFileFormatter("gofmt", []string{".go"}, false)
 
-	input := &common.PostToolUseInput{
+	input := &hook.PostToolUseInput{
 		ToolName: "Edit",
 		ToolInput: struct {
 			FilePath string `json:"file_path"`
@@ -263,7 +263,7 @@ func TestFileFormatter_ProcessInput_WithAllowedCommand(t *testing.T) {
 func TestFileFormatter_ProcessInput_NonExistentFile(t *testing.T) {
 	formatter := NewFileFormatter("gofmt", []string{".go"}, false)
 
-	input := &common.PostToolUseInput{
+	input := &hook.PostToolUseInput{
 		ToolName: "Edit",
 		ToolInput: struct {
 			FilePath string `json:"file_path"`

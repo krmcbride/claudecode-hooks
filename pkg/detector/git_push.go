@@ -7,7 +7,7 @@ import (
 
 	"mvdan.cc/sh/v3/syntax"
 
-	"github.com/krmcbride/claudecode-hooks/pkg/common"
+	"github.com/krmcbride/claudecode-hooks/pkg/shellparse"
 )
 
 // GitPushDetector provides comprehensive git push detection with recursion limits
@@ -48,7 +48,7 @@ func (d *GitPushDetector) analyzeCommandRecursive(command string) bool {
 	defer func() { d.currentDepth-- }()
 
 	// Parse the main command
-	calls, err := common.ParseCommand(command)
+	calls, err := shellparse.ParseCommand(command)
 	if err != nil {
 		// If we can't parse it, be conservative and block
 		d.issues = append(d.issues, "Failed to parse command: "+err.Error())
@@ -72,7 +72,7 @@ func (d *GitPushDetector) analyzeCallExpr(call *syntax.CallExpr) bool {
 	}
 
 	// Get command with enhanced resolution
-	cmd, cmdIsStatic := common.ResolveStaticWord(call.Args[0])
+	cmd, cmdIsStatic := shellparse.ResolveStaticWord(call.Args[0])
 
 	// If command is dynamic, it's suspicious
 	if !cmdIsStatic {
@@ -110,7 +110,7 @@ func (d *GitPushDetector) analyzeCallExpr(call *syntax.CallExpr) bool {
 
 // checkDirectGitPush checks for direct git push commands
 func (d *GitPushDetector) checkDirectGitPush(call *syntax.CallExpr, cmd string) bool {
-	if !common.IsGitCommand(cmd) {
+	if !shellparse.IsGitCommand(cmd) {
 		return false
 	}
 
@@ -120,7 +120,7 @@ func (d *GitPushDetector) checkDirectGitPush(call *syntax.CallExpr, cmd string) 
 	}
 
 	// Get the subcommand
-	subCmd, subCmdIsStatic := common.ResolveStaticWord(call.Args[1])
+	subCmd, subCmdIsStatic := shellparse.ResolveStaticWord(call.Args[1])
 
 	// If subcommand is dynamic, it could be "$SUBCMD" where SUBCMD=push
 	if !subCmdIsStatic {
@@ -140,7 +140,7 @@ func (d *GitPushDetector) checkDirectGitPush(call *syntax.CallExpr, cmd string) 
 // checkShellInterpreter checks for shell interpreter patterns
 func (d *GitPushDetector) checkShellInterpreter(call *syntax.CallExpr, _ string) bool {
 	// Extract shell commands using enhanced parsing
-	shellCommands, hasDynamicContent := common.ExtractShellCommands(call)
+	shellCommands, hasDynamicContent := shellparse.ExtractShellCommands(call)
 
 	// SECURITY: Block if dynamic content detected (prevents command substitution bypass)
 	if hasDynamicContent {
@@ -171,7 +171,7 @@ func (d *GitPushDetector) checkEvalCommand(call *syntax.CallExpr, cmd string) bo
 		return false
 	}
 
-	evalContent := common.AnalyzeEvalCommand(call)
+	evalContent := shellparse.AnalyzeEvalCommand(call)
 
 	for _, content := range evalContent {
 		// Recursively analyze eval content
@@ -204,7 +204,7 @@ func (d *GitPushDetector) checkExecutionPatterns(call *syntax.CallExpr, cmd stri
 
 	// Look for git push in arguments
 	for i := 1; i < len(call.Args); i++ {
-		arg, argIsStatic := common.ResolveStaticWord(call.Args[i])
+		arg, argIsStatic := shellparse.ResolveStaticWord(call.Args[i])
 		if !argIsStatic {
 			// Dynamic content in execution command
 			d.issues = append(d.issues, "Dynamic content in "+cmd+" command")
@@ -226,7 +226,7 @@ func (d *GitPushDetector) checkObfuscationPatterns(call *syntax.CallExpr) bool {
 	var allContent strings.Builder
 
 	for _, arg := range call.Args {
-		val, isStatic := common.ResolveStaticWord(arg)
+		val, isStatic := shellparse.ResolveStaticWord(arg)
 		if isStatic && val != "" {
 			allContent.WriteString(val)
 			allContent.WriteString(" ")
@@ -236,7 +236,7 @@ func (d *GitPushDetector) checkObfuscationPatterns(call *syntax.CallExpr) bool {
 	content := allContent.String()
 
 	// Use common obfuscation detection
-	if obfuscated, issues := common.DetectObfuscation(content); obfuscated {
+	if obfuscated, issues := shellparse.DetectObfuscation(content); obfuscated {
 		d.issues = append(d.issues, issues...)
 		// If obfuscated AND contains git-related terms, block it
 		lowerContent := strings.ToLower(content)

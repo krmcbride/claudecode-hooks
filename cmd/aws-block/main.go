@@ -5,7 +5,8 @@ import (
 	"log"
 	"strings"
 
-	"github.com/krmcbride/claudecode-hooks/pkg/common"
+	"github.com/krmcbride/claudecode-hooks/pkg/hook"
+	"github.com/krmcbride/claudecode-hooks/pkg/shellparse"
 )
 
 // Dangerous AWS commands that should be blocked
@@ -23,27 +24,27 @@ var dangerousCommands = map[string][]string{
 
 func main() {
 	// Read hook input
-	input, err := common.ReadHookInput()
+	input, err := hook.ReadHookInput()
 	if err != nil {
 		log.Printf("Failed to decode JSON: %v", err)
-		common.AllowExecution()
+		hook.AllowExecution()
 	}
 
 	// Only process Bash commands
 	if input.ToolName != "Bash" {
-		common.AllowExecution()
+		hook.AllowExecution()
 	}
 
 	command := input.ToolInput.Command
 	if command == "" {
-		common.AllowExecution()
+		hook.AllowExecution()
 	}
 
 	// Parse the command
-	calls, err := common.ParseCommand(command)
+	calls, err := shellparse.ParseCommand(command)
 	if err != nil {
 		// If we can't parse it, allow execution for AWS commands
-		common.AllowExecution()
+		hook.AllowExecution()
 	}
 
 	var issues []string
@@ -51,8 +52,8 @@ func main() {
 
 	// Check each command call
 	for _, call := range calls {
-		cmd := common.GetCommandName(call)
-		args := common.GetCommandArgs(call)
+		cmd := shellparse.GetCommandName(call)
+		args := shellparse.GetCommandArgs(call)
 
 		if patterns, exists := dangerousCommands[cmd]; exists {
 			fullCommand := cmd + " " + strings.Join(args, " ")
@@ -67,8 +68,8 @@ func main() {
 	}
 
 	if hasDangerousCommand {
-		common.BlockExecution("Dangerous AWS command detected!", issues)
+		hook.BlockExecution("Dangerous AWS command detected!", issues)
 	}
 
-	common.AllowExecution()
+	hook.AllowExecution()
 }

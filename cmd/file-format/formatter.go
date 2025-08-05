@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/krmcbride/claudecode-hooks/pkg/common"
+	"github.com/krmcbride/claudecode-hooks/pkg/hook"
 )
 
 // FileFormatter handles file formatting operations
@@ -30,7 +30,7 @@ func NewFileFormatter(command string, extensions []string, blockOnFail bool) *Fi
 }
 
 // ProcessInput processes PostToolUse input and formats files
-func (f *FileFormatter) ProcessInput(input *common.PostToolUseInput) error {
+func (f *FileFormatter) ProcessInput(input *hook.PostToolUseInput) error {
 	if !f.shouldProcessInput(input) {
 		return nil
 	}
@@ -49,7 +49,7 @@ func (f *FileFormatter) ProcessInput(input *common.PostToolUseInput) error {
 }
 
 // shouldProcessInput checks if we should process this input
-func (f *FileFormatter) shouldProcessInput(input *common.PostToolUseInput) bool {
+func (f *FileFormatter) shouldProcessInput(input *hook.PostToolUseInput) bool {
 	if !input.ToolResponse.Success {
 		return false
 	}
@@ -57,13 +57,13 @@ func (f *FileFormatter) shouldProcessInput(input *common.PostToolUseInput) bool 
 }
 
 // getFilesToFormat collects and filters files to format
-func (f *FileFormatter) getFilesToFormat(input *common.PostToolUseInput) []string {
+func (f *FileFormatter) getFilesToFormat(input *hook.PostToolUseInput) []string {
 	filePaths := f.collectFilePaths(input)
 	return f.filterAndValidateFiles(filePaths)
 }
 
 // collectFilePaths extracts file paths from the input
-func (f *FileFormatter) collectFilePaths(input *common.PostToolUseInput) []string {
+func (f *FileFormatter) collectFilePaths(input *hook.PostToolUseInput) []string {
 	var filePaths []string
 
 	switch input.ToolName {

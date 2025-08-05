@@ -6,7 +6,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/krmcbride/claudecode-hooks/pkg/common"
+	"github.com/krmcbride/claudecode-hooks/pkg/hook"
 )
 
 func main() {
@@ -34,10 +34,10 @@ func main() {
 	}
 
 	// Read input
-	input, err := common.ReadPostToolUseInput()
+	input, err := hook.ReadPostToolUseInput()
 	if err != nil {
 		log.Printf("Failed to decode JSON: %v", err)
-		common.AllowPostToolUse()
+		hook.AllowPostToolUse()
 	}
 
 	// Create formatter and process input
@@ -45,8 +45,8 @@ func main() {
 	formatter := NewFileFormatter(*formatCommand, extensions, *blockOnFailure)
 
 	if err := formatter.ProcessInput(input); err != nil {
-		common.BlockPostToolUse("File formatting failed")
+		hook.BlockPostToolUse("File formatting failed")
 	}
 
-	common.AllowPostToolUse()
+	hook.AllowPostToolUse()
 }
