@@ -14,7 +14,25 @@ type HookInput struct {
 	} `json:"tool_input"`
 }
 
-// PostToolUseInput represents the JSON input from Claude Code PostToolUse hooks
+// PostToolUseInput represents the JSON input from Claude Code PostToolUse hooks.
+//
+// NOTE: This is a simplified struct that covers common fields across different tools.
+// The actual JSON structure varies significantly between tools (Edit, Write, Bash, etc).
+// Each tool sends different fields in tool_input and tool_response.
+//
+// To discover the exact structure for each tool, use the hook-logger:
+//  1. Build: make build
+//  2. Configure in .claude/settings.json with matcher ".*"
+//  3. Redirect output: command: "/path/to/hook-logger >> /path/to/log.txt"
+//  4. Use various Claude Code tools and inspect the captured payloads
+//
+// Common variations:
+// - Edit/MultiEdit: Contains old_string, new_string, replace_all in tool_input
+// - Write: Contains content in tool_input
+// - Bash: Contains command in tool_input
+// - Read: Returns file content in tool_response
+//
+// See docs/tool-hook-inputs.md for documented examples.
 type PostToolUseInput struct {
 	SessionID      string `json:"session_id"`
 	TranscriptPath string `json:"transcript_path"`

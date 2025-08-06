@@ -62,7 +62,7 @@ Add hooks to your Claude Code settings.json:
         "hooks": [
           {
             "type": "command",
-            "command": "/path/to/krmcbride-file-format -cmd=goimports -ext=go"
+            "command": "/path/to/krmcbride-file-format -cmd=\"goimports -w {FILEPATH}\" -ext=.go"
           }
         ]
       }
@@ -126,8 +126,10 @@ file-format -cmd=FORMAT_COMMAND -ext=EXTENSIONS [OPTIONS]
 
 **Required Flags:**
 
-- `-cmd` - Format command to execute (e.g., "goimports", "prettier --write")
-- `-ext` - Comma-separated file extensions to process (e.g., "go", "js,ts,jsx,tsx")
+- `-cmd` - Format command to execute with optional `{FILEPATH}` placeholder
+  - Use `{FILEPATH}` to specify where the file path should be inserted
+  - If no placeholder is used, the file path is appended to the command
+- `-ext` - Comma-separated file extensions to process (e.g., ".go", ".js,.ts,.jsx,.tsx")
 
 **Optional Flags:**
 
@@ -137,14 +139,20 @@ file-format -cmd=FORMAT_COMMAND -ext=EXTENSIONS [OPTIONS]
 **Examples:**
 
 ```bash
-# Format Go files with goimports
-file-format -cmd=goimports -ext=go
+# Format Go files with goimports (using placeholder)
+file-format -cmd="goimports -w {FILEPATH}" -ext=.go
+
+# Format with make command (using placeholder)
+file-format -cmd="make fmt-file FILE={FILEPATH}" -ext=.go
 
 # Format TypeScript files with prettier, blocking on failure
-file-format -cmd="prettier --write" -ext="ts,tsx,js,jsx" -block
+file-format -cmd="prettier --write {FILEPATH}" -ext=".ts,.tsx,.js,.jsx" -block
 
-# Format Python files with black
-file-format -cmd="black --quiet" -ext=py
+# Format Python files with black (legacy syntax - appends filepath)
+file-format -cmd="black --quiet" -ext=.py
+
+# Complex command with multiple flags
+file-format -cmd="rustfmt --edition 2021 --config-path .rustfmt.toml {FILEPATH}" -ext=.rs
 ```
 
 ## Advanced Usage

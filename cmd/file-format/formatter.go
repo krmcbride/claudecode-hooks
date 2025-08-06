@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"errors"
+	"log"
 	"os/exec"
 	"path/filepath"
 	"slices"
@@ -31,11 +32,16 @@ func NewFileFormatter(command string, extensions []string, blockOnFail bool) *Fi
 
 // ProcessInput processes PostToolUse input and formats files
 func (f *FileFormatter) ProcessInput(input *hook.PostToolUseInput) error {
+	// Debug: log what we received
+	log.Printf("DEBUG: Tool=%s, FilePath=%s", input.ToolName, input.ToolInput.FilePath)
+
 	if !f.shouldProcessInput(input) {
+		log.Printf("DEBUG: Skipping processing for tool: %s", input.ToolName)
 		return nil
 	}
 
 	filesToFormat := f.getFilesToFormat(input)
+	log.Printf("DEBUG: Files to format: %v", filesToFormat)
 	if len(filesToFormat) == 0 {
 		return nil
 	}
@@ -115,13 +121,35 @@ func (f *FileFormatter) formatFiles(filesToFormat []string) bool {
 
 // formatFile runs the format command on a single file
 func (f *FileFormatter) formatFile(filePath string) error {
-	parts := strings.Fields(f.Command)
+	// Replace {FILEPATH} placeholder with actual file path
+	// This allows flexible command templates like:
+	// - "gofmt -w {FILEPATH}"
+	// - "make fmt-file FILE={FILEPATH}"
+	// - "prettier --write {FILEPATH} --config .prettierrc"
+	expandedCommand := strings.ReplaceAll(f.Command, "{FILEPATH}", filePath)
+
+	// Parse the command (with placeholder replaced if it was present)
+	parts := strings.Fields(expandedCommand)
 	if len(parts) == 0 {
 		return nil
 	}
 
 	baseCommand := parts[0]
-	args := append(parts[1:], filePath)
+	args := parts[1:]
+
+	// If no placeholder was found and command hasn't changed, use legacy behavior
+	// This maintains backwards compatibility for commands without placeholders
+	if expandedCommand == f.Command {
+		// If the last argument ends with =, concatenate the filepath without a space
+		// This handles legacy cases like "make fmt-file FILE="
+		if len(args) > 0 && strings.HasSuffix(args[len(args)-1], "=") {
+			args[len(args)-1] = args[len(args)-1] + filePath
+		} else {
+			// Default: append filepath as last argument
+			args = append(args, filePath)
+		}
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
