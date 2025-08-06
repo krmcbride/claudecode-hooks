@@ -12,17 +12,13 @@ import (
 	"github.com/krmcbride/claudecode-hooks/pkg/utils"
 )
 
-const (
-	defaultSecurityLevel = "advanced"
-	defaultMaxRecursion  = 10
-)
+const defaultMaxRecursion = 10
 
 func main() {
 	// Parse command-line flags
 	var (
 		command     = flag.String("cmd", "", "Primary command to monitor (required)")
 		patterns    = flag.String("patterns", "", "Comma-separated blocked patterns (required)")
-		security    = flag.String("security", defaultSecurityLevel, "Security level: basic|advanced|paranoid")
 		description = flag.String("desc", "", "Description for logging")
 		allowList   = flag.String("allow", "", "Comma-separated exception patterns")
 		maxRecur    = flag.String("max-recursion", strconv.Itoa(defaultMaxRecursion), "Max recursion depth")
@@ -49,16 +45,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Parse security level
-	securityLevel := detector.SecurityLevel(*security)
-	switch securityLevel {
-	case detector.SecurityBasic, detector.SecurityAdvanced, detector.SecurityParanoid:
-		// Valid
-	default:
-		fmt.Fprintf(os.Stderr, "Error: invalid security level '%s'. Must be: basic, advanced, or paranoid\n", *security)
-		os.Exit(1)
-	}
-
 	// Parse max recursion
 	maxRecursion, err := strconv.Atoi(*maxRecur)
 	if err != nil || maxRecursion <= 0 {
@@ -81,13 +67,13 @@ func main() {
 	// Read PreToolUse hook input
 	input, err := hook.ReadPreToolUseInput()
 	if err != nil {
-		// If we can't parse input, allow execution to avoid blocking legitimate commands
-		hook.AllowPreToolUse()
+		// Security tool must fail secure - block on parse errors
+		hook.BlockPreToolUse("Failed to parse hook input", []string{err.Error()})
 		return
 	}
 
-	// Create detector with configuration
-	commandDetector := detector.NewCommandDetector([]detector.CommandRule{rule}, securityLevel, maxRecursion)
+	// Create detector with configuration (always uses maximum security)
+	commandDetector := detector.NewCommandDetector([]detector.CommandRule{rule}, maxRecursion)
 
 	// Analyze the command
 	if commandDetector.AnalyzeCommand(input.ToolInput.Command) {
@@ -102,7 +88,10 @@ func main() {
 
 // showUsage displays usage information
 func showUsage() {
-	fmt.Fprintf(os.Stderr, `bash-block: Generic bash command blocker for Claude Code hooks
+	fmt.Fprintf(os.Stderr, `bash-block: Maximum security bash command blocker for Claude Code hooks
+
+Provides an additional layer of security on top of Claude Code's built-in deny permissions.
+Attempts to block commands in ALL forms including: variables, subshells, eval, obfuscation, etc.
 
 USAGE:
     bash-block -cmd=COMMAND -patterns=PATTERNS [OPTIONS]
@@ -115,12 +104,6 @@ REQUIRED FLAGS:
             Comma-separated list of blocked patterns (e.g., "push", "delete-bucket,terminate-instances")
 
 OPTIONAL FLAGS:
-    -security string
-            Security level (default: %s)
-            • basic:    Pattern matching only (fastest)
-            • advanced: + obfuscation detection (recommended)
-            • paranoid: + blocks all dynamic content (most secure)
-    
     -desc string
             Human-readable description for logging
     
@@ -133,18 +116,21 @@ OPTIONAL FLAGS:
     -help
             Show this help message
 
+SECURITY FEATURES:
+    • Attempts to block ALL forms of the command (variables, escaping, encoding)
+    • Detects common obfuscation (base64, hex, character escaping)
+    • Recursively analyzes nested commands (sh -c, eval, source)
+    • Blocks dynamic content (variable substitution, command substitution)
+
 EXAMPLES:
-    # Block git push commands with advanced security
+    # Block git push commands
     bash-block -cmd=git -patterns=push -desc="Block git push"
     
-    # Block dangerous AWS operations with basic security (faster)
-    bash-block -cmd=aws -patterns="delete-bucket,terminate-instances" -security=basic
+    # Block dangerous AWS operations
+    bash-block -cmd=aws -patterns="delete-bucket,terminate-instances"
     
-    # Block kubectl delete with exceptions for specific namespaces
-    bash-block -cmd=kubectl -patterns="delete" -allow="delete pod" -desc="Block dangerous kubectl deletes"
-    
-    # Paranoid security for sensitive commands
-    bash-block -cmd=rm -patterns="-rf" -security=paranoid -desc="Block rm -rf"
+    # Block kubectl delete with exceptions for pods
+    bash-block -cmd=kubectl -patterns="delete" -allow="delete pod"
 
 CLAUDE CODE CONFIGURATION:
 Add to your Claude Code settings.json:
@@ -158,11 +144,11 @@ Add to your Claude Code settings.json:
       },
       {
         "command": "/path/to/bash-block",
-        "args": ["-cmd=aws", "-patterns=delete-bucket,terminate-instances", "-security=basic"]
+        "args": ["-cmd=aws", "-patterns=delete-bucket,terminate-instances"]
       }
     ]
   }
 }
 
-`, defaultSecurityLevel, defaultMaxRecursion)
+`, defaultMaxRecursion)
 }

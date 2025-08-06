@@ -6,9 +6,9 @@ Security and automation hooks for [Claude Code](https://claude.ai/code) that pre
 
 ### 🛡️ bash-block: Generic Command Blocker
 
-- **Configurable Security**: Block any command with flexible pattern matching
+- **Maximum Security**: Provides additional defense-in-depth on top of Claude Code's built-in permissions
 - **Advanced Detection**: Detects obfuscated commands, shell escaping, and complex execution patterns
-- **Multiple Security Levels**: Choose between speed and thoroughness
+- **Always Paranoid**: Uses maximum security checks to prevent any bypass attempts
 - **Flexible Rules**: Support for blocked patterns and allow exceptions
 
 ### 🎨 file-format: Automatic Code Formatting
@@ -90,25 +90,26 @@ bash-block -cmd=COMMAND -patterns=PATTERNS [OPTIONS]
 
 **Optional Flags:**
 
-- `-security` - Security level: `basic`, `advanced` (default), `paranoid`
 - `-allow` - Comma-separated exception patterns
 - `-desc` - Human-readable description for logging
 - `-max-recursion` - Maximum analysis depth (default: 10)
 
-**Security Levels:**
+**Security Features:**
 
-- **basic**: Fast pattern matching only
-- **advanced**: + obfuscation detection (recommended)
-- **paranoid**: + blocks all dynamic content (most secure)
+- **Maximum Security**: Always uses the most comprehensive detection available
+- **Obfuscation Detection**: Detects base64, hex, and character escaping attempts
+- **Dynamic Content Blocking**: Blocks all variable substitutions and command substitutions
+- **Recursive Analysis**: Analyzes nested commands (sh -c, eval, source)
+- **Defense-in-Depth**: Provides additional security layer beyond Claude Code's built-in permissions
 
 **Examples:**
 
 ```bash
-# Block git push with advanced security
+# Block git push (maximum security always enabled)
 bash-block -cmd=git -patterns=push
 
-# Block dangerous AWS operations with basic security (faster)
-bash-block -cmd=aws -patterns="delete-bucket,terminate-instances" -security=basic
+# Block dangerous AWS operations
+bash-block -cmd=aws -patterns="delete-bucket,terminate-instances"
 
 # Block kubectl delete with exceptions
 bash-block -cmd=kubectl -patterns=delete -allow="delete pod"
@@ -193,7 +194,7 @@ The `bash-block` hook detects sophisticated bypass attempts including:
 - Shell interpreters: `sh -c 'git push'`
 - Execution wrappers: `xargs git push`
 
-For maximum security, use `paranoid` mode, but note it may block legitimate dynamic commands.
+The tool always operates at maximum security to provide robust defense-in-depth protection.
 
 ## Development
 

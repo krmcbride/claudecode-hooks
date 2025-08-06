@@ -21,7 +21,7 @@ func NewObfuscationDetector(patternMatcher *PatternMatcher) *ObfuscationDetector
 	}
 }
 
-// CheckObfuscationPatterns checks for common obfuscation patterns (advanced security only)
+// CheckObfuscationPatterns checks for common obfuscation patterns
 func (od *ObfuscationDetector) CheckObfuscationPatterns(call *syntax.CallExpr, commandRules []CommandRule) (bool, []string) {
 	var issues []string
 

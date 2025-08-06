@@ -10,18 +10,6 @@ import (
 	"github.com/krmcbride/claudecode-hooks/pkg/shellparse"
 )
 
-// SecurityLevel defines the security analysis depth
-type SecurityLevel string
-
-const (
-	// SecurityBasic enables pattern matching only
-	SecurityBasic SecurityLevel = "basic"
-	// SecurityAdvanced enables pattern matching + obfuscation detection
-	SecurityAdvanced SecurityLevel = "advanced"
-	// SecurityParanoid enables all dynamic content blocking
-	SecurityParanoid SecurityLevel = "paranoid"
-)
-
 // CommandRule defines what commands and patterns to detect
 type CommandRule struct {
 	Command         string   // Primary command (git, aws, kubectl)
@@ -30,10 +18,9 @@ type CommandRule struct {
 	Description     string   // Human readable description
 }
 
-// CommandDetector provides comprehensive command detection with configurable rules
+// CommandDetector provides comprehensive command detection with maximum security
 type CommandDetector struct {
 	commandRules        []CommandRule
-	securityLevel       SecurityLevel
 	issues              []string
 	maxDepth            int
 	currentDepth        int
@@ -42,19 +29,18 @@ type CommandDetector struct {
 	obfuscationDetector *ObfuscationDetector
 }
 
-// NewCommandDetector creates a new detector with specified rules and security level
-func NewCommandDetector(rules []CommandRule, securityLevel SecurityLevel, maxDepth int) *CommandDetector {
+// NewCommandDetector creates a new detector with maximum security
+func NewCommandDetector(rules []CommandRule, maxDepth int) *CommandDetector {
 	if maxDepth <= 0 {
 		maxDepth = 10 // Default safe recursion limit
 	}
 
 	patternMatcher := NewPatternMatcher()
-	securityChecker := NewSecurityChecker(securityLevel, patternMatcher)
+	securityChecker := NewSecurityChecker(patternMatcher)
 	obfuscationDetector := NewObfuscationDetector(patternMatcher)
 
 	return &CommandDetector{
 		commandRules:        rules,
-		securityLevel:       securityLevel,
 		issues:              make([]string, 0),
 		maxDepth:            maxDepth,
 		currentDepth:        0,
@@ -64,9 +50,14 @@ func NewCommandDetector(rules []CommandRule, securityLevel SecurityLevel, maxDep
 	}
 }
 
-// GetIssues returns all detected issues
+// GetIssues returns all detected issues (returns a copy to prevent aliasing)
 func (d *CommandDetector) GetIssues() []string {
-	return d.issues
+	if len(d.issues) == 0 {
+		return nil
+	}
+	result := make([]string, len(d.issues))
+	copy(result, d.issues)
+	return result
 }
 
 // AnalyzeCommand is the main entry point for command analysis
@@ -118,47 +109,43 @@ func (d *CommandDetector) analyzeCallExpr(call *syntax.CallExpr) bool {
 		return true
 	}
 
-	// Advanced security checks (skip for basic level)
-	if d.securityLevel != SecurityBasic {
-		// Check for shell interpreter patterns (sh -c, bash -c)
-		if blocked, issues := d.securityChecker.CheckShellInterpreter(call, d.commandRules); blocked {
-			d.issues = append(d.issues, issues...)
-			// Also recursively analyze shell commands
-			shellCommands, _ := shellparse.ExtractShellCommands(call)
-			for _, shellCmd := range shellCommands {
-				if d.analyzeCommandRecursive(shellCmd) {
-					d.issues = append(d.issues, "Blocked command detected in shell command: "+shellCmd)
-					return true
-				}
+	// Always perform all security checks (maximum security)
+	// Check for shell interpreter patterns (sh -c, bash -c)
+	if blocked, issues := d.securityChecker.CheckShellInterpreter(call, d.commandRules); blocked {
+		d.issues = append(d.issues, issues...)
+		// Also recursively analyze shell commands
+		shellCommands, _ := shellparse.ExtractShellCommands(call)
+		for _, shellCmd := range shellCommands {
+			if d.analyzeCommandRecursive(shellCmd) {
+				d.issues = append(d.issues, "Blocked command detected in shell command: "+shellCmd)
+				return true
 			}
-			return true
 		}
+		return true
+	}
 
-		// Check for eval patterns
-		if blocked, issues := d.securityChecker.CheckEvalCommand(call, cmd, d.commandRules); blocked {
-			d.issues = append(d.issues, issues...)
-			// Also recursively analyze eval content
-			evalContent := shellparse.AnalyzeEvalCommand(call)
-			for _, content := range evalContent {
-				if d.analyzeCommandRecursive(content) {
-					d.issues = append(d.issues, "Blocked command detected in eval command")
-					return true
-				}
-			}
+	// Check for eval patterns
+	if blocked, issues := d.securityChecker.CheckEvalCommand(call, cmd, d.commandRules); blocked {
+		d.issues = append(d.issues, issues...)
+		// Also recursively analyze eval content
+		evalContent := shellparse.AnalyzeEvalCommand(call)
+		if slices.ContainsFunc(evalContent, d.analyzeCommandRecursive) {
+			d.issues = append(d.issues, "Blocked command detected in eval command")
 			return true
 		}
+		return true
+	}
 
-		// Check for other execution patterns
-		if blocked, issues := d.securityChecker.CheckExecutionPatterns(call, cmd, d.commandRules); blocked {
-			d.issues = append(d.issues, issues...)
-			return true
-		}
+	// Check for other execution patterns
+	if blocked, issues := d.securityChecker.CheckExecutionPatterns(call, cmd, d.commandRules); blocked {
+		d.issues = append(d.issues, issues...)
+		return true
+	}
 
-		// Check for obfuscation patterns
-		if blocked, issues := d.obfuscationDetector.CheckObfuscationPatterns(call, d.commandRules); blocked {
-			d.issues = append(d.issues, issues...)
-			return true
-		}
+	// Check for obfuscation patterns
+	if blocked, issues := d.obfuscationDetector.CheckObfuscationPatterns(call, d.commandRules); blocked {
+		d.issues = append(d.issues, issues...)
+		return true
 	}
 
 	return false
