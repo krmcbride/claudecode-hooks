@@ -78,11 +78,11 @@ func main() {
 		Description:     *description,
 	}
 
-	// Read hook input
-	input, err := hook.ReadHookInput()
+	// Read PreToolUse hook input
+	input, err := hook.ReadPreToolUseInput()
 	if err != nil {
 		// If we can't parse input, allow execution to avoid blocking legitimate commands
-		hook.AllowExecution()
+		hook.AllowPreToolUse()
 		return
 	}
 
@@ -92,12 +92,12 @@ func main() {
 	// Analyze the command
 	if commandDetector.AnalyzeCommand(input.ToolInput.Command) {
 		issues := commandDetector.GetIssues()
-		hook.BlockExecution(fmt.Sprintf("Blocked %s command detected!", *command), issues)
+		hook.BlockPreToolUse(fmt.Sprintf("Blocked %s command detected!", *command), issues)
 		return
 	}
 
 	// Allow execution if no issues found
-	hook.AllowExecution()
+	hook.AllowPreToolUse()
 }
 
 // showUsage displays usage information

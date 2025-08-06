@@ -6,8 +6,9 @@ import (
 	"os"
 )
 
-// HookInput represents the JSON input from Claude Code PreToolUse hooks (legacy)
-type HookInput struct {
+// PreToolUseInput represents the JSON input from Claude Code PreToolUse hooks.
+// This is specifically for Bash tool hooks that need to inspect commands.
+type PreToolUseInput struct {
 	ToolName  string `json:"tool_name"`
 	ToolInput struct {
 		Command string `json:"command"`
@@ -34,7 +35,7 @@ type HookInput struct {
 //   - Write: content
 //   - Bash: command
 //
-// - tool_response varies by tool (we don't use any of these fields)
+// - tool_response varies by tool and contains the results
 //
 // See docs/tool-hook-inputs.md for documented examples.
 type PostToolUseInput struct {
@@ -42,17 +43,20 @@ type PostToolUseInput struct {
 	ToolInput struct {
 		FilePath string `json:"file_path"`
 	} `json:"tool_input"`
+	ToolResponse map[string]any `json:"tool_response"`
 }
 
-// HookResponse represents the response that can be returned to Claude Code
-type HookResponse struct {
+// PostToolUseResponse represents the JSON response for PostToolUse hooks.
+// Used to block further actions after a tool has been executed.
+type PostToolUseResponse struct {
 	Decision string `json:"decision,omitempty"` // "block" or omit for allow
 	Reason   string `json:"reason,omitempty"`   // Optional explanation when blocking
 }
 
-// ReadHookInput reads and parses the hook input from stdin (PreToolUse)
-func ReadHookInput() (*HookInput, error) {
-	var input HookInput
+// ReadPreToolUseInput reads and parses PreToolUse hook input from stdin.
+// This is typically used by hooks that need to inspect Bash commands.
+func ReadPreToolUseInput() (*PreToolUseInput, error) {
+	var input PreToolUseInput
 	decoder := json.NewDecoder(os.Stdin)
 	if err := decoder.Decode(&input); err != nil {
 		return nil, err
@@ -70,8 +74,9 @@ func ReadPostToolUseInput() (*PostToolUseInput, error) {
 	return &input, nil
 }
 
-// BlockExecution blocks the command execution with an error message
-func BlockExecution(message string, issues []string) {
+// BlockPreToolUse blocks the tool execution with an error message (PreToolUse hooks).
+// Exit code 2 tells Claude Code to block the tool and show stderr output.
+func BlockPreToolUse(message string, issues []string) {
 	_, _ = os.Stderr.WriteString("🚫 BLOCKED: " + message + "\n") //nolint:errcheck // Error writing to stderr is not actionable in blocking function
 	for _, issue := range issues {
 		_, _ = os.Stderr.WriteString("Issue: " + issue + "\n") //nolint:errcheck // Error writing to stderr is not actionable in blocking function
@@ -79,14 +84,14 @@ func BlockExecution(message string, issues []string) {
 	os.Exit(2) // Block execution
 }
 
-// AllowExecution allows the command to proceed
-func AllowExecution() {
+// AllowPreToolUse allows the tool to proceed (PreToolUse hooks).
+func AllowPreToolUse() {
 	os.Exit(0)
 }
 
 // BlockPostToolUse blocks further actions with a JSON response
 func BlockPostToolUse(reason string) {
-	response := HookResponse{
+	response := PostToolUseResponse{
 		Decision: "block",
 		Reason:   reason,
 	}
