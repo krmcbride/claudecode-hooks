@@ -124,12 +124,3 @@ func (f *FileFormatter) formatFile(filePath string) error {
 	_, err := cmd.CombinedOutput()
 	return err
 }
-
-// ParseExtensions parses a comma-separated extension string
-func ParseExtensions(extensionsFlag string) []string {
-	extensions := strings.Split(extensionsFlag, ",")
-	for i, ext := range extensions {
-		extensions[i] = strings.TrimSpace(ext)
-	}
-	return extensions
-}
