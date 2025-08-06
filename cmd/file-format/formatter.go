@@ -50,9 +50,7 @@ func (f *FileFormatter) ProcessInput(input *hook.PostToolUseInput) error {
 
 // shouldProcessInput checks if we should process this input
 func (f *FileFormatter) shouldProcessInput(input *hook.PostToolUseInput) bool {
-	if !input.ToolResponse.Success {
-		return false
-	}
+	// PostToolUse hooks only run after successful operations, so we don't need to check success
 	return input.ToolName == "Edit" || input.ToolName == "MultiEdit" || input.ToolName == "Write"
 }
 
