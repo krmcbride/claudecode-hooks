@@ -9,29 +9,27 @@ import (
 	"github.com/krmcbride/claudecode-hooks/pkg/shellparse"
 )
 
-// SecurityChecker provides advanced security validation for commands
+// SecurityChecker provides maximum security validation for commands
 type SecurityChecker struct {
-	securityLevel  SecurityLevel
 	patternMatcher *PatternMatcher
 }
 
-// NewSecurityChecker creates a new security checker
-func NewSecurityChecker(securityLevel SecurityLevel, patternMatcher *PatternMatcher) *SecurityChecker {
+// NewSecurityChecker creates a new security checker with maximum security
+func NewSecurityChecker(patternMatcher *PatternMatcher) *SecurityChecker {
 	return &SecurityChecker{
-		securityLevel:  securityLevel,
 		patternMatcher: patternMatcher,
 	}
 }
 
-// CheckShellInterpreter checks for shell interpreter patterns (advanced security only)
+// CheckShellInterpreter checks for shell interpreter patterns
 func (sc *SecurityChecker) CheckShellInterpreter(call *syntax.CallExpr, commandRules []CommandRule) (bool, []string) {
 	var issues []string
 
 	// Extract shell commands using enhanced parsing
 	shellCommands, hasDynamicContent := shellparse.ExtractShellCommands(call)
 
-	// SECURITY: Block if dynamic content detected (prevents command substitution bypass)
-	if hasDynamicContent && sc.securityLevel == SecurityParanoid {
+	// SECURITY: Always block dynamic content (prevents command substitution bypass)
+	if hasDynamicContent {
 		issues = append(issues, "Dynamic shell command content detected - potential command substitution")
 		return true, issues
 	}
@@ -47,7 +45,7 @@ func (sc *SecurityChecker) CheckShellInterpreter(call *syntax.CallExpr, commandR
 	return false, issues
 }
 
-// CheckEvalCommand checks for eval command patterns (advanced security only)
+// CheckEvalCommand checks for eval command patterns
 func (sc *SecurityChecker) CheckEvalCommand(call *syntax.CallExpr, cmd string, commandRules []CommandRule) (bool, []string) {
 	var issues []string
 
@@ -68,7 +66,7 @@ func (sc *SecurityChecker) CheckEvalCommand(call *syntax.CallExpr, cmd string, c
 	return false, issues
 }
 
-// CheckExecutionPatterns checks for other command execution patterns (advanced security only)
+// CheckExecutionPatterns checks for other command execution patterns
 func (sc *SecurityChecker) CheckExecutionPatterns(call *syntax.CallExpr, cmd string, commandRules []CommandRule) (bool, []string) {
 	var issues []string
 
@@ -85,8 +83,8 @@ func (sc *SecurityChecker) CheckExecutionPatterns(call *syntax.CallExpr, cmd str
 	// Look for blocked patterns in arguments
 	for i := 1; i < len(call.Args); i++ {
 		arg, argIsStatic := shellparse.ResolveStaticWord(call.Args[i])
-		if !argIsStatic && sc.securityLevel == SecurityParanoid {
-			// Dynamic content in execution command
+		if !argIsStatic {
+			// Always block dynamic content in execution commands
 			issues = append(issues, "Dynamic content in "+cmd+" command")
 			return true, issues
 		}
@@ -100,27 +98,25 @@ func (sc *SecurityChecker) CheckExecutionPatterns(call *syntax.CallExpr, cmd str
 	return false, issues
 }
 
-// CheckDynamicCommand checks if a dynamic command should be blocked based on security level
+// CheckDynamicCommand checks if a dynamic command should be blocked
 func (sc *SecurityChecker) CheckDynamicCommand(cmdIsStatic bool) (bool, []string) {
 	var issues []string
 
-	// If command is dynamic, check security level
+	// Always block dynamic commands
 	if !cmdIsStatic {
-		if sc.securityLevel == SecurityAdvanced || sc.securityLevel == SecurityParanoid {
-			issues = append(issues, "Dynamic command detected (potential obfuscation)")
-			return true, issues
-		}
+		issues = append(issues, "Dynamic command detected (potential obfuscation)")
+		return true, issues
 	}
 
 	return false, issues
 }
 
-// CheckDynamicSubcommand checks if dynamic subcommands should be blocked for paranoid level
+// CheckDynamicSubcommand checks if dynamic subcommands should be blocked
 func (sc *SecurityChecker) CheckDynamicSubcommand(argIsStatic bool, command string) (bool, []string) {
 	var issues []string
 
-	// For paranoid level, block any dynamic subcommands
-	if !argIsStatic && sc.securityLevel == SecurityParanoid {
+	// Always block dynamic subcommands
+	if !argIsStatic {
 		issues = append(issues, "Dynamic "+command+" subcommand detected")
 		return true, issues
 	}

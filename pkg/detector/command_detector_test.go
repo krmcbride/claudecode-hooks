@@ -13,14 +13,10 @@ func TestNewCommandDetector(t *testing.T) {
 		},
 	}
 
-	detector := NewCommandDetector(rules, SecurityAdvanced, 5)
+	detector := NewCommandDetector(rules, 5)
 
 	if len(detector.commandRules) != 1 {
 		t.Errorf("Expected 1 rule, got %d", len(detector.commandRules))
-	}
-
-	if detector.securityLevel != SecurityAdvanced {
-		t.Errorf("Expected SecurityAdvanced, got %v", detector.securityLevel)
 	}
 
 	if detector.maxDepth != 5 {
@@ -40,44 +36,38 @@ func TestCommandDetector_BasicGitPush(t *testing.T) {
 	tests := []struct {
 		name      string
 		command   string
-		security  SecurityLevel
 		wantBlock bool
 	}{
 		{
 			name:      "Direct git push",
 			command:   "git push",
-			security:  SecurityBasic,
 			wantBlock: true,
 		},
 		{
 			name:      "Git push with arguments",
 			command:   "git push origin main",
-			security:  SecurityBasic,
 			wantBlock: true,
 		},
 		{
 			name:      "Git pull (allowed)",
 			command:   "git pull",
-			security:  SecurityBasic,
 			wantBlock: false,
 		},
 		{
-			name:      "Git push with advanced security",
-			command:   "git push",
-			security:  SecurityAdvanced,
+			name:      "Shell command with git push",
+			command:   "sh -c 'git push'",
 			wantBlock: true,
 		},
 		{
-			name:      "Git push with paranoid security",
-			command:   "git push",
-			security:  SecurityParanoid,
+			name:      "Git push with variable",
+			command:   "CMD=push; git $CMD",
 			wantBlock: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			detector := NewCommandDetector(rules, tt.security, 10)
+			detector := NewCommandDetector(rules, 10)
 			gotBlock := detector.AnalyzeCommand(tt.command)
 
 			if gotBlock != tt.wantBlock {
@@ -151,54 +141,7 @@ func TestCommandDetector_MultipleRules(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			detector := NewCommandDetector(rules, SecurityBasic, 10)
-			gotBlock := detector.AnalyzeCommand(tt.command)
-
-			if gotBlock != tt.wantBlock {
-				t.Errorf("AnalyzeCommand() = %v, want %v. Issues: %v", gotBlock, tt.wantBlock, detector.GetIssues())
-			}
-		})
-	}
-}
-
-func TestCommandDetector_SecurityLevels(t *testing.T) {
-	rules := []CommandRule{
-		{
-			Command:         "git",
-			BlockedPatterns: []string{"push"},
-			Description:     "Block git push",
-		},
-	}
-
-	tests := []struct {
-		name      string
-		command   string
-		security  SecurityLevel
-		wantBlock bool
-	}{
-		{
-			name:      "Basic security - shell command not analyzed",
-			command:   "sh -c 'git push'",
-			security:  SecurityBasic,
-			wantBlock: false,
-		},
-		{
-			name:      "Advanced security - shell command analyzed",
-			command:   "sh -c 'git push'",
-			security:  SecurityAdvanced,
-			wantBlock: true,
-		},
-		{
-			name:      "Paranoid security - shell command analyzed",
-			command:   "sh -c 'git push'",
-			security:  SecurityParanoid,
-			wantBlock: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			detector := NewCommandDetector(rules, tt.security, 10)
+			detector := NewCommandDetector(rules, 10)
 			gotBlock := detector.AnalyzeCommand(tt.command)
 
 			if gotBlock != tt.wantBlock {
@@ -251,7 +194,7 @@ func TestCommandDetector_CommandMatching(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			detector := NewCommandDetector(rules, SecurityBasic, 10)
+			detector := NewCommandDetector(rules, 10)
 			gotBlock := detector.AnalyzeCommand(tt.command)
 
 			if gotBlock != tt.wantBlock {
@@ -300,7 +243,7 @@ func TestCommandDetector_AllowExceptions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			detector := NewCommandDetector(rules, SecurityBasic, 10)
+			detector := NewCommandDetector(rules, 10)
 			gotBlock := detector.AnalyzeCommand(tt.command)
 
 			if gotBlock != tt.wantBlock {
@@ -312,12 +255,12 @@ func TestCommandDetector_AllowExceptions(t *testing.T) {
 
 func TestCommandDetector_MaxDepthValidation(t *testing.T) {
 	// Test that invalid max depth defaults to 10
-	detector := NewCommandDetector([]CommandRule{}, SecurityBasic, 0)
+	detector := NewCommandDetector([]CommandRule{}, 0)
 	if detector.maxDepth != 10 {
 		t.Errorf("Expected default maxDepth 10, got %d", detector.maxDepth)
 	}
 
-	detector = NewCommandDetector([]CommandRule{}, SecurityBasic, -5)
+	detector = NewCommandDetector([]CommandRule{}, -5)
 	if detector.maxDepth != 10 {
 		t.Errorf("Expected default maxDepth 10, got %d", detector.maxDepth)
 	}
@@ -332,7 +275,7 @@ func TestCommandDetector_IssueReporting(t *testing.T) {
 		},
 	}
 
-	detector := NewCommandDetector(rules, SecurityBasic, 10)
+	detector := NewCommandDetector(rules, 10)
 
 	// Test that issues are cleared between analyses
 	detector.AnalyzeCommand("git push")
