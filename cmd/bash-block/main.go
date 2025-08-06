@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-	"strings"
 
 	"github.com/krmcbride/claudecode-hooks/pkg/detector"
 	"github.com/krmcbride/claudecode-hooks/pkg/hook"
+	"github.com/krmcbride/claudecode-hooks/pkg/utils"
 )
 
 const (
@@ -67,8 +67,8 @@ func main() {
 	}
 
 	// Parse patterns and allow list
-	blockedPatterns := parseCommaSeparated(*patterns)
-	allowExceptions := parseCommaSeparated(*allowList)
+	blockedPatterns := utils.ParseCommaSeparated(*patterns)
+	allowExceptions := utils.ParseCommaSeparated(*allowList)
 
 	// Create command rule
 	rule := detector.CommandRule{
@@ -98,25 +98,6 @@ func main() {
 
 	// Allow execution if no issues found
 	hook.AllowExecution()
-}
-
-// parseCommaSeparated splits a comma-separated string and trims whitespace
-func parseCommaSeparated(input string) []string {
-	if input == "" {
-		return []string{}
-	}
-
-	parts := strings.Split(input, ",")
-	result := make([]string, 0, len(parts))
-
-	for _, part := range parts {
-		trimmed := strings.TrimSpace(part)
-		if trimmed != "" {
-			result = append(result, trimmed)
-		}
-	}
-
-	return result
 }
 
 // showUsage displays usage information

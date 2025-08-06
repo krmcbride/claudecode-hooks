@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/krmcbride/claudecode-hooks/pkg/hook"
+	"github.com/krmcbride/claudecode-hooks/pkg/utils"
 )
 
 func main() {
@@ -41,7 +42,7 @@ func main() {
 	}
 
 	// Create formatter and process input
-	extensions := ParseExtensions(*extensionsFlag)
+	extensions := utils.ParseCommaSeparated(*extensionsFlag)
 	formatter := NewFileFormatter(*formatCommand, extensions, *blockOnFailure)
 
 	if err := formatter.ProcessInput(input); err != nil {

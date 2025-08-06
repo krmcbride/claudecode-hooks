@@ -56,17 +56,18 @@ func (f *FileFormatter) shouldProcessInput(input *hook.PostToolUseInput) bool {
 
 // getFilesToFormat checks if the file should be formatted
 func (f *FileFormatter) getFilesToFormat(input *hook.PostToolUseInput) []string {
-	// All three tools (Edit, Write, MultiEdit) have file_path at the root level
-	if input.ToolInput.FilePath == "" {
+	// Get the file path from tool_input
+	filePath := input.ToolInput.FilePath
+	if filePath == "" {
 		return nil
 	}
 
 	// Check if the file extension is allowed
-	if !f.isAllowedExtension(input.ToolInput.FilePath) {
+	if !f.isAllowedExtension(filePath) {
 		return nil
 	}
 
-	return []string{input.ToolInput.FilePath}
+	return []string{filePath}
 }
 
 // isAllowedExtension checks if the file extension is allowed
@@ -123,13 +124,4 @@ func (f *FileFormatter) formatFile(filePath string) error {
 	cmd := exec.CommandContext(ctx, baseCommand, args...) // #nosec G204 - command is user-configured
 	_, err := cmd.CombinedOutput()
 	return err
-}
-
-// ParseExtensions parses a comma-separated extension string
-func ParseExtensions(extensionsFlag string) []string {
-	extensions := strings.Split(extensionsFlag, ",")
-	for i, ext := range extensions {
-		extensions[i] = strings.TrimSpace(ext)
-	}
-	return extensions
 }

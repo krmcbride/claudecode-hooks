@@ -7,9 +7,10 @@ import (
 	"testing"
 
 	"github.com/krmcbride/claudecode-hooks/pkg/hook"
+	"github.com/krmcbride/claudecode-hooks/pkg/utils"
 )
 
-func TestParseExtensions(t *testing.T) {
+func TestParseCommaSeparatedForExtensions(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    string
@@ -33,15 +34,15 @@ func TestParseExtensions(t *testing.T) {
 		{
 			name:     "Empty string",
 			input:    "",
-			expected: []string{""},
+			expected: []string{},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := ParseExtensions(tt.input)
+			result := utils.ParseCommaSeparated(tt.input)
 			if !reflect.DeepEqual(result, tt.expected) {
-				t.Errorf("ParseExtensions(%s) = %v, want %v", tt.input, result, tt.expected)
+				t.Errorf("ParseCommaSeparated(%s) = %v, want %v", tt.input, result, tt.expected)
 			}
 		})
 	}
