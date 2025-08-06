@@ -2,7 +2,7 @@
 # This file contains all build and installation-related targets
 
 # Hook definitions (shared by build, install, and uninstall targets)
-HOOKS := bash-block:cmd/bash-block file-format:cmd/file-format
+HOOKS := bash-block:cmd/bash-block file-format:cmd/file-format hook-logger:cmd/hook-logger
 
 ##@ Build
 
@@ -31,6 +31,7 @@ endef
 # NOTE: When adding a new hook, add it to HOOKS above AND add an eval line below
 $(eval $(call hook-build-template,bash-block,cmd/bash-block))
 $(eval $(call hook-build-template,file-format,cmd/file-format))
+$(eval $(call hook-build-template,hook-logger,cmd/hook-logger))
 
 ##@ Installation
 
@@ -114,6 +115,8 @@ endef
 # NOTE: When adding a new hook, add it to HOOKS above AND add eval lines below
 $(eval $(call hook-install-template,bash-block))
 $(eval $(call hook-install-template,file-format))
+$(eval $(call hook-install-template,hook-logger))
 
 $(eval $(call hook-uninstall-template,bash-block))
 $(eval $(call hook-uninstall-template,file-format))
+$(eval $(call hook-uninstall-template,hook-logger))

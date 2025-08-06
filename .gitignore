@@ -1,5 +1,7 @@
 .direnv/
 
+*.log
+
 # Build and binary directories
 build/
 bin/
