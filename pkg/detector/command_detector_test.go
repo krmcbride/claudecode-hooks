@@ -68,10 +68,10 @@ func TestCommandDetector_BasicGitPush(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			detector := NewCommandDetector(rules, 10)
-			gotBlock := detector.AnalyzeCommand(tt.command)
+			gotBlock := detector.ShouldBlockCommand(tt.command)
 
 			if gotBlock != tt.wantBlock {
-				t.Errorf("AnalyzeCommand() = %v, want %v. Issues: %v", gotBlock, tt.wantBlock, detector.GetIssues())
+				t.Errorf("ShouldBlockCommand() = %v, want %v. Issues: %v", gotBlock, tt.wantBlock, detector.GetIssues())
 			}
 		})
 	}
@@ -142,10 +142,10 @@ func TestCommandDetector_MultipleRules(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			detector := NewCommandDetector(rules, 10)
-			gotBlock := detector.AnalyzeCommand(tt.command)
+			gotBlock := detector.ShouldBlockCommand(tt.command)
 
 			if gotBlock != tt.wantBlock {
-				t.Errorf("AnalyzeCommand() = %v, want %v. Issues: %v", gotBlock, tt.wantBlock, detector.GetIssues())
+				t.Errorf("ShouldBlockCommand() = %v, want %v. Issues: %v", gotBlock, tt.wantBlock, detector.GetIssues())
 			}
 		})
 	}
@@ -195,10 +195,10 @@ func TestCommandDetector_CommandMatching(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			detector := NewCommandDetector(rules, 10)
-			gotBlock := detector.AnalyzeCommand(tt.command)
+			gotBlock := detector.ShouldBlockCommand(tt.command)
 
 			if gotBlock != tt.wantBlock {
-				t.Errorf("AnalyzeCommand() = %v, want %v. Issues: %v", gotBlock, tt.wantBlock, detector.GetIssues())
+				t.Errorf("ShouldBlockCommand() = %v, want %v. Issues: %v", gotBlock, tt.wantBlock, detector.GetIssues())
 			}
 		})
 	}
@@ -244,10 +244,10 @@ func TestCommandDetector_AllowExceptions(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			detector := NewCommandDetector(rules, 10)
-			gotBlock := detector.AnalyzeCommand(tt.command)
+			gotBlock := detector.ShouldBlockCommand(tt.command)
 
 			if gotBlock != tt.wantBlock {
-				t.Errorf("AnalyzeCommand() = %v, want %v. Issues: %v", gotBlock, tt.wantBlock, detector.GetIssues())
+				t.Errorf("ShouldBlockCommand() = %v, want %v. Issues: %v", gotBlock, tt.wantBlock, detector.GetIssues())
 			}
 		})
 	}
@@ -278,10 +278,10 @@ func TestCommandDetector_IssueReporting(t *testing.T) {
 	detector := NewCommandDetector(rules, 10)
 
 	// Test that issues are cleared between analyses
-	detector.AnalyzeCommand("git push")
+	detector.ShouldBlockCommand("git push")
 	firstIssues := len(detector.GetIssues())
 
-	detector.AnalyzeCommand("git pull") // Should not add issues
+	detector.ShouldBlockCommand("git pull") // Should not add issues
 	secondIssues := len(detector.GetIssues())
 
 	if secondIssues != 0 {
@@ -290,5 +290,138 @@ func TestCommandDetector_IssueReporting(t *testing.T) {
 
 	if firstIssues == 0 {
 		t.Errorf("Expected issues for blocked command, got %d", firstIssues)
+	}
+}
+
+func TestCommandDetector_InterspersedFlags(t *testing.T) {
+	rules := []CommandRule{
+		{
+			Command:         "aws",
+			BlockedPatterns: []string{"terminate-instances"},
+			Description:     "Block AWS terminate instances",
+		},
+		{
+			Command:         "kubectl",
+			BlockedPatterns: []string{"delete"},
+			AllowExceptions: []string{"delete pod"},
+			Description:     "Block kubectl delete with exceptions",
+		},
+	}
+
+	tests := []struct {
+		name      string
+		command   string
+		wantBlock bool
+	}{
+		{
+			name:      "AWS terminate-instances with region flag before subcommand",
+			command:   "aws --region us-east-1 ec2 terminate-instances --instance-ids i-1234567890abcdef0",
+			wantBlock: true,
+		},
+		{
+			name:      "AWS terminate-instances with multiple flags before subcommand",
+			command:   "aws --region us-west-2 --profile prod ec2 terminate-instances --instance-ids i-1234567890abcdef0",
+			wantBlock: true,
+		},
+		{
+			name:      "AWS terminate-instances with output flag after subcommand",
+			command:   "aws ec2 terminate-instances --instance-ids i-1234567890abcdef0 --output json",
+			wantBlock: true,
+		},
+		{
+			name:      "AWS terminate-instances with flags before and after subcommand",
+			command:   "aws --region us-east-1 ec2 terminate-instances --instance-ids i-1234567890abcdef0 --output table",
+			wantBlock: true,
+		},
+		{
+			name:      "Kubectl delete namespace with context flag",
+			command:   "kubectl --context prod delete --force namespace production",
+			wantBlock: true,
+		},
+		{
+			name:      "Kubectl delete namespace with multiple flags",
+			command:   "kubectl --kubeconfig ~/.kube/config --context staging delete namespace test-env --grace-period=0",
+			wantBlock: true,
+		},
+		{
+			name:      "Kubectl delete pod with context flag (should be allowed)",
+			command:   "kubectl --context prod delete pod my-pod",
+			wantBlock: false,
+		},
+		{
+			name:      "Kubectl delete pod with multiple flags (should be allowed)",
+			command:   "kubectl --kubeconfig ~/.kube/config --context prod delete pod my-pod --grace-period=30",
+			wantBlock: false,
+		},
+		{
+			name:      "AWS list operations with flags (should be allowed)",
+			command:   "aws --region us-east-1 ec2 describe-instances --output json",
+			wantBlock: false,
+		},
+		{
+			name:      "Complex AWS terminate-instances with many flags",
+			command:   "aws --cli-read-timeout 60 --region us-east-1 --profile production ec2 terminate-instances --instance-ids i-1234567890abcdef0 i-abcdef1234567890 --output json --dry-run",
+			wantBlock: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			detector := NewCommandDetector(rules, 10)
+			gotBlock := detector.ShouldBlockCommand(tt.command)
+
+			if gotBlock != tt.wantBlock {
+				t.Errorf("ShouldBlockCommand() = %v, want %v. Command: %s, Issues: %v", gotBlock, tt.wantBlock, tt.command, detector.GetIssues())
+			}
+		})
+	}
+}
+
+func TestCommandDetector_ProximityLimits(t *testing.T) {
+	rules := []CommandRule{
+		{
+			Command:         "kubectl",
+			BlockedPatterns: []string{"delete"},
+			AllowExceptions: []string{"delete pod"},
+			Description:     "Block kubectl delete with pod exception",
+		},
+	}
+
+	tests := []struct {
+		name      string
+		command   string
+		wantBlock bool
+		note      string
+	}{
+		{
+			name:      "Normal delete pod (should be allowed)",
+			command:   "kubectl delete pod my-app",
+			wantBlock: false,
+			note:      "Exception should work normally",
+		},
+		{
+			name:      "Delete with long flags before pod (proximity test)",
+			command:   "kubectl delete --some-very-long-flag-name-that-makes-distance-over-twenty-chars pod my-app",
+			wantBlock: false, // This should still be allowed if exception works
+			note:      "Exception should still work despite long flags",
+		},
+		{
+			name:      "Delete namespace with long flags (should still block)",
+			command:   "kubectl delete --some-very-long-flag-name-that-makes-distance-over-twenty-chars namespace prod",
+			wantBlock: true,
+			note:      "Block should still work despite long flags",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			detector := NewCommandDetector(rules, 10)
+			gotBlock := detector.ShouldBlockCommand(tt.command)
+
+			if gotBlock != tt.wantBlock {
+				t.Errorf("ShouldBlockCommand() = %v, want %v. %s. Command: %s, Issues: %v",
+					gotBlock, tt.wantBlock, tt.note, tt.command, detector.GetIssues())
+			}
+		})
 	}
 }

@@ -1,4 +1,4 @@
-// Package main provides a generic bash command blocker for Claude Code hooks
+// Package main provides a bash command safety validator for Claude Code hooks
 package main
 
 import (
@@ -75,8 +75,8 @@ func main() {
 	// Create detector with configuration (always uses maximum security)
 	commandDetector := detector.NewCommandDetector([]detector.CommandRule{rule}, maxRecursion)
 
-	// Analyze the command
-	if commandDetector.AnalyzeCommand(input.ToolInput.Command) {
+	// Check if command should be blocked
+	if commandDetector.ShouldBlockCommand(input.ToolInput.Command) {
 		issues := commandDetector.GetIssues()
 		hook.BlockPreToolUse(fmt.Sprintf("Blocked %s command detected!", *command), issues)
 		return
@@ -116,11 +116,11 @@ OPTIONAL FLAGS:
     -help
             Show this help message
 
-SECURITY FEATURES:
-    • Attempts to block ALL forms of the command (variables, escaping, encoding)
-    • Detects common obfuscation (base64, hex, character escaping)
-    • Recursively analyzes nested commands (sh -c, eval, source)
-    • Blocks dynamic content (variable substitution, command substitution)
+SAFETY FEATURES:
+    • Comprehensive detection including variables, escaping, and encoding
+    • Identifies obfuscated commands (base64, hex, character escaping)
+    • Analyzes nested commands (sh -c, eval, source)
+    • Blocks dynamic content that cannot be verified
 
 EXAMPLES:
     # Block git push commands
