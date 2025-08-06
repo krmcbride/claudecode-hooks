@@ -16,13 +16,13 @@ func TestFileFormatter_ProcessInput_Integration(t *testing.T) {
 	testTxtFile := filepath.Join(tempDir, "test.txt")
 
 	// Create the files
-	if err := os.WriteFile(testGoFile, []byte("package main\n\nfunc main() {}\n"), 0o644); err != nil {
+	if err := os.WriteFile(testGoFile, []byte("package main\n\nfunc main() {}\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(testJsFile, []byte("console.log('test');\n"), 0o644); err != nil {
+	if err := os.WriteFile(testJsFile, []byte("console.log('test');\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(testTxtFile, []byte("test content\n"), 0o644); err != nil {
+	if err := os.WriteFile(testTxtFile, []byte("test content\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -34,153 +34,87 @@ func TestFileFormatter_ProcessInput_Integration(t *testing.T) {
 		expectedFiles []string
 	}{
 		{
-			name:      "Edit processing with echo command",
+			name:      "Edit processing with Go file",
 			formatter: NewFileFormatter("echo formatted", []string{".go"}, false),
 			input: &hook.PostToolUseInput{
 				ToolName: "Edit",
 				ToolInput: struct {
 					FilePath string `json:"file_path"`
-					Content  string `json:"content,omitempty"`
-					Edits    []struct {
-						FilePath string `json:"file_path"`
-					} `json:"edits,omitempty"`
 				}{
 					FilePath: testGoFile,
-				},
-				ToolResponse: struct {
-					FilePath string `json:"filePath,omitempty"`
-					Success  bool   `json:"success"`
-				}{
-					Success: true,
-				},
-			},
-			expectError:   false, // echo command should succeed
-			expectedFiles: []string{testGoFile},
-		},
-		{
-			name:      "Skip failed operation",
-			formatter: NewFileFormatter("echo formatted", []string{".go"}, false),
-			input: &hook.PostToolUseInput{
-				ToolName: "Edit",
-				ToolInput: struct {
-					FilePath string `json:"file_path"`
-					Content  string `json:"content,omitempty"`
-					Edits    []struct {
-						FilePath string `json:"file_path"`
-					} `json:"edits,omitempty"`
-				}{
-					FilePath: testGoFile,
-				},
-				ToolResponse: struct {
-					FilePath string `json:"filePath,omitempty"`
-					Success  bool   `json:"success"`
-				}{
-					Success: false,
 				},
 			},
 			expectError:   false,
-			expectedFiles: nil, // No files because operation failed
+			expectedFiles: []string{testGoFile},
 		},
 		{
-			name:      "Skip wrong tool",
+			name:      "MultiEdit processing with JS file",
+			formatter: NewFileFormatter("echo formatted", []string{".js"}, false),
+			input: &hook.PostToolUseInput{
+				ToolName: "MultiEdit",
+				ToolInput: struct {
+					FilePath string `json:"file_path"`
+				}{
+					FilePath: testJsFile,
+				},
+			},
+			expectError:   false,
+			expectedFiles: []string{testJsFile},
+		},
+		{
+			name:      "Write processing with Go file",
+			formatter: NewFileFormatter("echo formatted", []string{".go"}, false),
+			input: &hook.PostToolUseInput{
+				ToolName: "Write",
+				ToolInput: struct {
+					FilePath string `json:"file_path"`
+				}{
+					FilePath: testGoFile,
+				},
+			},
+			expectError:   false,
+			expectedFiles: []string{testGoFile},
+		},
+		{
+			name:      "Skip file with wrong extension",
+			formatter: NewFileFormatter("echo formatted", []string{".go"}, false),
+			input: &hook.PostToolUseInput{
+				ToolName: "Edit",
+				ToolInput: struct {
+					FilePath string `json:"file_path"`
+				}{
+					FilePath: testTxtFile,
+				},
+			},
+			expectError:   false,
+			expectedFiles: nil, // File should be skipped
+		},
+		{
+			name:      "Skip unsupported tool",
 			formatter: NewFileFormatter("echo formatted", []string{".go"}, false),
 			input: &hook.PostToolUseInput{
 				ToolName: "Read",
 				ToolInput: struct {
 					FilePath string `json:"file_path"`
-					Content  string `json:"content,omitempty"`
-					Edits    []struct {
-						FilePath string `json:"file_path"`
-					} `json:"edits,omitempty"`
 				}{
 					FilePath: testGoFile,
 				},
-				ToolResponse: struct {
-					FilePath string `json:"filePath,omitempty"`
-					Success  bool   `json:"success"`
-				}{
-					Success: true,
-				},
 			},
 			expectError:   false,
-			expectedFiles: nil, // No files because wrong tool
+			expectedFiles: nil, // Tool should be skipped
 		},
 		{
-			name:      "Filter by extension",
-			formatter: NewFileFormatter("echo formatted", []string{".go"}, false),
-			input: &hook.PostToolUseInput{
-				ToolName: "MultiEdit",
-				ToolInput: struct {
-					FilePath string `json:"file_path"`
-					Content  string `json:"content,omitempty"`
-					Edits    []struct {
-						FilePath string `json:"file_path"`
-					} `json:"edits,omitempty"`
-				}{
-					Edits: []struct {
-						FilePath string `json:"file_path"`
-					}{
-						{FilePath: testGoFile},
-						{FilePath: testJsFile},
-						{FilePath: testTxtFile},
-					},
-				},
-				ToolResponse: struct {
-					FilePath string `json:"filePath,omitempty"`
-					Success  bool   `json:"success"`
-				}{
-					Success: true,
-				},
-			},
-			expectError:   false, // echo command should succeed
-			expectedFiles: []string{testGoFile},
-		},
-		{
-			name:      "No files to format",
-			formatter: NewFileFormatter("echo formatted", []string{".rs"}, false),
-			input: &hook.PostToolUseInput{
-				ToolName: "Edit",
-				ToolInput: struct {
-					FilePath string `json:"file_path"`
-					Content  string `json:"content,omitempty"`
-					Edits    []struct {
-						FilePath string `json:"file_path"`
-					} `json:"edits,omitempty"`
-				}{
-					FilePath: testGoFile,
-				},
-				ToolResponse: struct {
-					FilePath string `json:"filePath,omitempty"`
-					Success  bool   `json:"success"`
-				}{
-					Success: true,
-				},
-			},
-			expectError:   false,
-			expectedFiles: nil, // No matching extensions
-		},
-		{
-			name:      "Block on failure enabled",
+			name:      "Block on format failure",
 			formatter: NewFileFormatter("nonexistent-command-12345", []string{".go"}, true),
 			input: &hook.PostToolUseInput{
 				ToolName: "Edit",
 				ToolInput: struct {
 					FilePath string `json:"file_path"`
-					Content  string `json:"content,omitempty"`
-					Edits    []struct {
-						FilePath string `json:"file_path"`
-					} `json:"edits,omitempty"`
 				}{
 					FilePath: testGoFile,
 				},
-				ToolResponse: struct {
-					FilePath string `json:"filePath,omitempty"`
-					Success  bool   `json:"success"`
-				}{
-					Success: true,
-				},
 			},
-			expectError:   true, // Should error because command doesn't exist and BlockOnFail=true
+			expectError:   true,
 			expectedFiles: []string{testGoFile},
 		},
 	}
@@ -195,102 +129,49 @@ func TestFileFormatter_ProcessInput_Integration(t *testing.T) {
 			if !tt.expectError && err != nil {
 				t.Errorf("ProcessInput() expected no error, got %v", err)
 			}
-
-			// Verify that the correct files would be processed (only if we should process input)
-			if tt.formatter.shouldProcessInput(tt.input) {
-				filesToFormat := tt.formatter.getFilesToFormat(tt.input)
-				if len(filesToFormat) != len(tt.expectedFiles) {
-					t.Errorf("Expected %d files to format, got %d", len(tt.expectedFiles), len(filesToFormat))
-				}
-
-				// Check that expected files are in the list
-				fileMap := make(map[string]bool)
-				for _, file := range filesToFormat {
-					fileMap[file] = true
-				}
-				for _, expectedFile := range tt.expectedFiles {
-					if !fileMap[expectedFile] {
-						t.Errorf("Expected file %s not found in files to format", expectedFile)
-					}
-				}
-			} else {
-				// If we shouldn't process input, there should be no expected files
-				if len(tt.expectedFiles) != 0 {
-					t.Errorf("Expected no files for skipped input, but test expects %d files", len(tt.expectedFiles))
-				}
-			}
 		})
 	}
 }
 
-func TestFileFormatter_ProcessInput_WithAllowedCommand(t *testing.T) {
-	// Create temporary test file
-	tempDir := t.TempDir()
-	testGoFile := filepath.Join(tempDir, "test.go")
-
-	if err := os.WriteFile(testGoFile, []byte("package main\n\nfunc main() {}\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	// Use gofmt which should be available and allowed
-	formatter := NewFileFormatter("gofmt", []string{".go"}, false)
+func TestFileFormatter_ProcessInput_EmptyFilePath(t *testing.T) {
+	formatter := NewFileFormatter("echo test", []string{".go"}, false)
 
 	input := &hook.PostToolUseInput{
 		ToolName: "Edit",
 		ToolInput: struct {
 			FilePath string `json:"file_path"`
-			Content  string `json:"content,omitempty"`
-			Edits    []struct {
-				FilePath string `json:"file_path"`
-			} `json:"edits,omitempty"`
 		}{
-			FilePath: testGoFile,
-		},
-		ToolResponse: struct {
-			FilePath string `json:"filePath,omitempty"`
-			Success  bool   `json:"success"`
-		}{
-			Success: true,
+			FilePath: "",
 		},
 	}
 
+	// Should not error, just skip processing
 	err := formatter.ProcessInput(input)
 	if err != nil {
-		t.Errorf("ProcessInput() with gofmt should not error, got %v", err)
+		t.Errorf("ProcessInput() with empty filepath should not error, got %v", err)
 	}
 }
 
-func TestFileFormatter_ProcessInput_NonExistentFile(t *testing.T) {
-	formatter := NewFileFormatter("gofmt", []string{".go"}, false)
+func TestFileFormatter_ProcessInput_PlaceholderExpansion(t *testing.T) {
+	tempDir := t.TempDir()
+	testFile := filepath.Join(tempDir, "test.go")
+	if err := os.WriteFile(testFile, []byte("package main"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 
+	// Test with {FILEPATH} placeholder
+	formatter := NewFileFormatter("echo {FILEPATH}", []string{".go"}, false)
 	input := &hook.PostToolUseInput{
 		ToolName: "Edit",
 		ToolInput: struct {
 			FilePath string `json:"file_path"`
-			Content  string `json:"content,omitempty"`
-			Edits    []struct {
-				FilePath string `json:"file_path"`
-			} `json:"edits,omitempty"`
 		}{
-			FilePath: "nonexistent.go",
-		},
-		ToolResponse: struct {
-			FilePath string `json:"filePath,omitempty"`
-			Success  bool   `json:"success"`
-		}{
-			Success: true,
+			FilePath: testFile,
 		},
 	}
 
-	// Should attempt to format the file - let gofmt handle the error
 	err := formatter.ProcessInput(input)
 	if err != nil {
-		t.Errorf("ProcessInput() with non-existent file should not error (BlockOnFail=false), got %v", err)
-	}
-
-	// Verify file is included for formatting
-	filesToFormat := formatter.getFilesToFormat(input)
-	if len(filesToFormat) != 1 || filesToFormat[0] != "nonexistent.go" {
-		t.Errorf("Expected 1 file to format [nonexistent.go], got %v", filesToFormat)
+		t.Errorf("ProcessInput() with placeholder should not error, got %v", err)
 	}
 }

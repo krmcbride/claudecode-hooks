@@ -16,40 +16,32 @@ type HookInput struct {
 
 // PostToolUseInput represents the JSON input from Claude Code PostToolUse hooks.
 //
-// NOTE: This is a simplified struct that covers common fields across different tools.
-// The actual JSON structure varies significantly between tools (Edit, Write, Bash, etc).
-// Each tool sends different fields in tool_input and tool_response.
+// NOTE: This is a minimal struct containing only the fields we actually use.
+// The actual JSON payloads contain many more fields that vary by tool type.
 //
-// To discover the exact structure for each tool, use the hook-logger:
+// To discover the full structure for each tool, use the hook-logger:
 //  1. Build: make build
 //  2. Configure in .claude/settings.json with matcher ".*"
 //  3. Redirect output: command: "/path/to/hook-logger >> /path/to/log.txt"
 //  4. Use various Claude Code tools and inspect the captured payloads
 //
-// Common variations:
-// - Edit/MultiEdit: Contains old_string, new_string, replace_all in tool_input
-// - Write: Contains content in tool_input
-// - Bash: Contains command in tool_input
-// - Read: Returns file content in tool_response
+// Full payload structure (not all fields are decoded):
+// - session_id, transcript_path, cwd, hook_event_name
+// - tool_input varies by tool:
+//   - Edit/MultiEdit/Write: file_path (we only use this)
+//   - Edit: old_string, new_string
+//   - MultiEdit: edits array with old_string, new_string
+//   - Write: content
+//   - Bash: command
+//
+// - tool_response varies by tool (we don't use any of these fields)
 //
 // See docs/tool-hook-inputs.md for documented examples.
 type PostToolUseInput struct {
-	SessionID      string `json:"session_id"`
-	TranscriptPath string `json:"transcript_path"`
-	CWD            string `json:"cwd"`
-	HookEventName  string `json:"hook_event_name"`
-	ToolName       string `json:"tool_name"`
-	ToolInput      struct {
+	ToolName  string `json:"tool_name"`
+	ToolInput struct {
 		FilePath string `json:"file_path"`
-		Content  string `json:"content,omitempty"`
-		Edits    []struct {
-			FilePath string `json:"file_path"`
-		} `json:"edits,omitempty"`
 	} `json:"tool_input"`
-	ToolResponse struct {
-		FilePath string `json:"filePath,omitempty"`
-		Success  bool   `json:"success"`
-	} `json:"tool_response"`
 }
 
 // HookResponse represents the response that can be returned to Claude Code

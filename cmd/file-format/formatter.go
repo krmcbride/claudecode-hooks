@@ -4,7 +4,6 @@ package main
 import (
 	"context"
 	"errors"
-	"log"
 	"os/exec"
 	"path/filepath"
 	"slices"
@@ -32,16 +31,11 @@ func NewFileFormatter(command string, extensions []string, blockOnFail bool) *Fi
 
 // ProcessInput processes PostToolUse input and formats files
 func (f *FileFormatter) ProcessInput(input *hook.PostToolUseInput) error {
-	// Debug: log what we received
-	log.Printf("DEBUG: Tool=%s, FilePath=%s", input.ToolName, input.ToolInput.FilePath)
-
 	if !f.shouldProcessInput(input) {
-		log.Printf("DEBUG: Skipping processing for tool: %s", input.ToolName)
 		return nil
 	}
 
 	filesToFormat := f.getFilesToFormat(input)
-	log.Printf("DEBUG: Files to format: %v", filesToFormat)
 	if len(filesToFormat) == 0 {
 		return nil
 	}
@@ -60,46 +54,19 @@ func (f *FileFormatter) shouldProcessInput(input *hook.PostToolUseInput) bool {
 	return input.ToolName == "Edit" || input.ToolName == "MultiEdit" || input.ToolName == "Write"
 }
 
-// getFilesToFormat collects and filters files to format
+// getFilesToFormat checks if the file should be formatted
 func (f *FileFormatter) getFilesToFormat(input *hook.PostToolUseInput) []string {
-	filePaths := f.collectFilePaths(input)
-	return f.filterAndValidateFiles(filePaths)
-}
-
-// collectFilePaths extracts file paths from the input
-func (f *FileFormatter) collectFilePaths(input *hook.PostToolUseInput) []string {
-	var filePaths []string
-
-	switch input.ToolName {
-	case "Edit", "Write":
-		if input.ToolInput.FilePath != "" {
-			filePaths = append(filePaths, input.ToolInput.FilePath)
-		}
-	case "MultiEdit":
-		seen := make(map[string]bool)
-		for _, edit := range input.ToolInput.Edits {
-			if edit.FilePath != "" && !seen[edit.FilePath] {
-				filePaths = append(filePaths, edit.FilePath)
-				seen[edit.FilePath] = true
-			}
-		}
-		if input.ToolInput.FilePath != "" && !seen[input.ToolInput.FilePath] {
-			filePaths = append(filePaths, input.ToolInput.FilePath)
-		}
+	// All three tools (Edit, Write, MultiEdit) have file_path at the root level
+	if input.ToolInput.FilePath == "" {
+		return nil
 	}
 
-	return filePaths
-}
-
-// filterAndValidateFiles filters files by extension
-func (f *FileFormatter) filterAndValidateFiles(filePaths []string) []string {
-	var filesToFormat []string
-	for _, filePath := range filePaths {
-		if f.isAllowedExtension(filePath) {
-			filesToFormat = append(filesToFormat, filePath)
-		}
+	// Check if the file extension is allowed
+	if !f.isAllowedExtension(input.ToolInput.FilePath) {
+		return nil
 	}
-	return filesToFormat
+
+	return []string{input.ToolInput.FilePath}
 }
 
 // isAllowedExtension checks if the file extension is allowed

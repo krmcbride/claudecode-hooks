@@ -74,67 +74,37 @@ func TestFileFormatter_shouldProcessInput(t *testing.T) {
 		expected bool
 	}{
 		{
-			name: "Successful Edit",
+			name: "Edit tool",
 			input: &hook.PostToolUseInput{
 				ToolName: "Edit",
-				ToolResponse: struct {
-					FilePath string `json:"filePath,omitempty"`
-					Success  bool   `json:"success"`
-				}{
-					Success: true,
-				},
 			},
 			expected: true,
 		},
 		{
-			name: "Successful MultiEdit",
+			name: "MultiEdit tool",
 			input: &hook.PostToolUseInput{
 				ToolName: "MultiEdit",
-				ToolResponse: struct {
-					FilePath string `json:"filePath,omitempty"`
-					Success  bool   `json:"success"`
-				}{
-					Success: true,
-				},
 			},
 			expected: true,
 		},
 		{
-			name: "Successful Write",
+			name: "Write tool",
 			input: &hook.PostToolUseInput{
 				ToolName: "Write",
-				ToolResponse: struct {
-					FilePath string `json:"filePath,omitempty"`
-					Success  bool   `json:"success"`
-				}{
-					Success: true,
-				},
 			},
 			expected: true,
 		},
 		{
-			name: "Failed Edit",
+			name: "Wrong tool - Read",
 			input: &hook.PostToolUseInput{
-				ToolName: "Edit",
-				ToolResponse: struct {
-					FilePath string `json:"filePath,omitempty"`
-					Success  bool   `json:"success"`
-				}{
-					Success: false,
-				},
+				ToolName: "Read",
 			},
 			expected: false,
 		},
 		{
-			name: "Wrong tool",
+			name: "Wrong tool - Bash",
 			input: &hook.PostToolUseInput{
-				ToolName: "Read",
-				ToolResponse: struct {
-					FilePath string `json:"filePath,omitempty"`
-					Success  bool   `json:"success"`
-				}{
-					Success: true,
-				},
+				ToolName: "Bash",
 			},
 			expected: false,
 		},
@@ -150,8 +120,8 @@ func TestFileFormatter_shouldProcessInput(t *testing.T) {
 	}
 }
 
-func TestFileFormatter_collectFilePaths(t *testing.T) {
-	formatter := NewFileFormatter("echo test", []string{".go"}, false)
+func TestFileFormatter_getFilesToFormat(t *testing.T) {
+	formatter := NewFileFormatter("echo test", []string{".go", ".js"}, false)
 
 	tests := []struct {
 		name     string
@@ -159,15 +129,11 @@ func TestFileFormatter_collectFilePaths(t *testing.T) {
 		expected []string
 	}{
 		{
-			name: "Edit with single file",
+			name: "Edit with Go file",
 			input: &hook.PostToolUseInput{
 				ToolName: "Edit",
 				ToolInput: struct {
 					FilePath string `json:"file_path"`
-					Content  string `json:"content,omitempty"`
-					Edits    []struct {
-						FilePath string `json:"file_path"`
-					} `json:"edits,omitempty"`
 				}{
 					FilePath: "main.go",
 				},
@@ -175,64 +141,40 @@ func TestFileFormatter_collectFilePaths(t *testing.T) {
 			expected: []string{"main.go"},
 		},
 		{
-			name: "MultiEdit with multiple files",
+			name: "MultiEdit with Go file",
 			input: &hook.PostToolUseInput{
 				ToolName: "MultiEdit",
 				ToolInput: struct {
 					FilePath string `json:"file_path"`
-					Content  string `json:"content,omitempty"`
-					Edits    []struct {
-						FilePath string `json:"file_path"`
-					} `json:"edits,omitempty"`
 				}{
-					FilePath: "main.go",
-					Edits: []struct {
-						FilePath string `json:"file_path"`
-					}{
-						{FilePath: "utils.go"},
-						{FilePath: "config.go"},
-					},
+					FilePath: "utils.go",
 				},
 			},
-			expected: []string{"utils.go", "config.go", "main.go"},
+			expected: []string{"utils.go"},
 		},
 		{
-			name: "MultiEdit with duplicate files",
-			input: &hook.PostToolUseInput{
-				ToolName: "MultiEdit",
-				ToolInput: struct {
-					FilePath string `json:"file_path"`
-					Content  string `json:"content,omitempty"`
-					Edits    []struct {
-						FilePath string `json:"file_path"`
-					} `json:"edits,omitempty"`
-				}{
-					FilePath: "main.go",
-					Edits: []struct {
-						FilePath string `json:"file_path"`
-					}{
-						{FilePath: "main.go"},
-						{FilePath: "utils.go"},
-					},
-				},
-			},
-			expected: []string{"main.go", "utils.go"},
-		},
-		{
-			name: "Write with single file",
+			name: "Write with JS file",
 			input: &hook.PostToolUseInput{
 				ToolName: "Write",
 				ToolInput: struct {
 					FilePath string `json:"file_path"`
-					Content  string `json:"content,omitempty"`
-					Edits    []struct {
-						FilePath string `json:"file_path"`
-					} `json:"edits,omitempty"`
 				}{
-					FilePath: "new_file.go",
+					FilePath: "app.js",
 				},
 			},
-			expected: []string{"new_file.go"},
+			expected: []string{"app.js"},
+		},
+		{
+			name: "Edit with wrong extension",
+			input: &hook.PostToolUseInput{
+				ToolName: "Edit",
+				ToolInput: struct {
+					FilePath string `json:"file_path"`
+				}{
+					FilePath: "README.md",
+				},
+			},
+			expected: nil, // Filtered out due to extension
 		},
 		{
 			name: "Edit with empty file path",
@@ -240,23 +182,19 @@ func TestFileFormatter_collectFilePaths(t *testing.T) {
 				ToolName: "Edit",
 				ToolInput: struct {
 					FilePath string `json:"file_path"`
-					Content  string `json:"content,omitempty"`
-					Edits    []struct {
-						FilePath string `json:"file_path"`
-					} `json:"edits,omitempty"`
 				}{
 					FilePath: "",
 				},
 			},
-			expected: nil, // Empty slice is returned as nil
+			expected: nil, // Empty file path
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := formatter.collectFilePaths(tt.input)
+			result := formatter.getFilesToFormat(tt.input)
 			if !reflect.DeepEqual(result, tt.expected) {
-				t.Errorf("collectFilePaths() = %v, want %v", result, tt.expected)
+				t.Errorf("getFilesToFormat() = %v, want %v", result, tt.expected)
 			}
 		})
 	}
@@ -312,41 +250,49 @@ func TestFileFormatter_isAllowedExtension(t *testing.T) {
 	}
 }
 
-func TestFileFormatter_filterAndValidateFiles(t *testing.T) {
-	formatter := NewFileFormatter("echo test", []string{".go", ".js"}, false)
-
+func TestFileFormatter_formatFile_placeholder(t *testing.T) {
 	tests := []struct {
-		name      string
-		filePaths []string
-		expected  []string
+		name        string
+		command     string
+		filePath    string
+		expectError bool
 	}{
 		{
-			name:      "Filter by extension",
-			filePaths: []string{"test.go", "test.js", "test.txt"},
-			expected:  []string{"test.go", "test.js"},
+			name:        "Command with {FILEPATH} placeholder",
+			command:     "echo Formatting: {FILEPATH}",
+			filePath:    "test.go",
+			expectError: false,
 		},
 		{
-			name:      "Include any path with correct extension",
-			filePaths: []string{"test.go", "../other/file.go", "/absolute/path/file.js"},
-			expected:  []string{"test.go", "../other/file.go", "/absolute/path/file.js"},
+			name:        "Command without placeholder appends filepath",
+			command:     "echo",
+			filePath:    "test.go",
+			expectError: false,
 		},
 		{
-			name:      "Empty input",
-			filePaths: []string{},
-			expected:  nil, // Empty slice is returned as nil
+			name:        "Command ending with = concatenates filepath",
+			command:     "echo FILE=",
+			filePath:    "test.go",
+			expectError: false,
 		},
 		{
-			name:      "No matching extensions",
-			filePaths: []string{"test.txt", "config.yaml"},
-			expected:  nil,
+			name:        "Empty command",
+			command:     "",
+			filePath:    "test.go",
+			expectError: false, // Empty command returns nil
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := formatter.filterAndValidateFiles(tt.filePaths)
-			if !reflect.DeepEqual(result, tt.expected) {
-				t.Errorf("filterAndValidateFiles(%v) = %v, want %v", tt.filePaths, result, tt.expected)
+			formatter := NewFileFormatter(tt.command, []string{".go"}, false)
+			err := formatter.formatFile(tt.filePath)
+
+			if tt.expectError && err == nil {
+				t.Errorf("formatFile() expected error, got nil")
+			}
+			if !tt.expectError && err != nil {
+				t.Errorf("formatFile() expected no error, got %v", err)
 			}
 		})
 	}
@@ -379,7 +325,7 @@ func TestFileFormatter_formatFile(t *testing.T) {
 
 	// Create a temporary file for testing
 	tempFile := filepath.Join(t.TempDir(), "test.go")
-	if err := os.WriteFile(tempFile, []byte("package main"), 0o644); err != nil {
+	if err := os.WriteFile(tempFile, []byte("package main"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
