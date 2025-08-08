@@ -7,7 +7,7 @@ import (
 func TestNewCommandDetector(t *testing.T) {
 	rules := []CommandRule{
 		{
-			Command:         "git",
+			BlockedCommand:  "git",
 			BlockedPatterns: []string{"push"},
 			Description:     "Block git push",
 		},
@@ -27,7 +27,7 @@ func TestNewCommandDetector(t *testing.T) {
 func TestCommandDetector_BasicGitPush(t *testing.T) {
 	rules := []CommandRule{
 		{
-			Command:         "git",
+			BlockedCommand:  "git",
 			BlockedPatterns: []string{"push"},
 			Description:     "Block git push",
 		},
@@ -80,19 +80,19 @@ func TestCommandDetector_BasicGitPush(t *testing.T) {
 func TestCommandDetector_MultipleRules(t *testing.T) {
 	rules := []CommandRule{
 		{
-			Command:         "git",
+			BlockedCommand:  "git",
 			BlockedPatterns: []string{"push"},
 			Description:     "Block git push",
 		},
 		{
-			Command:         "aws",
+			BlockedCommand:  "aws",
 			BlockedPatterns: []string{"delete-bucket", "terminate-instances"},
 			Description:     "Block dangerous AWS operations",
 		},
 		{
-			Command:         "kubectl",
+			BlockedCommand:  "kubectl",
 			BlockedPatterns: []string{"delete"},
-			AllowExceptions: []string{"delete pod"},
+			AllowedPatterns: []string{"delete pod"},
 			Description:     "Block kubectl delete with exceptions",
 		},
 	}
@@ -154,7 +154,7 @@ func TestCommandDetector_MultipleRules(t *testing.T) {
 func TestCommandDetector_CommandMatching(t *testing.T) {
 	rules := []CommandRule{
 		{
-			Command:         "git",
+			BlockedCommand:  "git",
 			BlockedPatterns: []string{"push"},
 			Description:     "Block git push",
 		},
@@ -204,12 +204,12 @@ func TestCommandDetector_CommandMatching(t *testing.T) {
 	}
 }
 
-func TestCommandDetector_AllowExceptions(t *testing.T) {
+func TestCommandDetector_AllowedPatterns(t *testing.T) {
 	rules := []CommandRule{
 		{
-			Command:         "kubectl",
+			BlockedCommand:  "kubectl",
 			BlockedPatterns: []string{"delete"},
-			AllowExceptions: []string{"delete pod", "delete configmap"},
+			AllowedPatterns: []string{"delete pod", "delete configmap"},
 			Description:     "Block kubectl delete with exceptions",
 		},
 	}
@@ -269,7 +269,7 @@ func TestCommandDetector_MaxDepthValidation(t *testing.T) {
 func TestCommandDetector_IssueReporting(t *testing.T) {
 	rules := []CommandRule{
 		{
-			Command:         "git",
+			BlockedCommand:  "git",
 			BlockedPatterns: []string{"push"},
 			Description:     "Block git push",
 		},
@@ -296,14 +296,14 @@ func TestCommandDetector_IssueReporting(t *testing.T) {
 func TestCommandDetector_InterspersedFlags(t *testing.T) {
 	rules := []CommandRule{
 		{
-			Command:         "aws",
+			BlockedCommand:  "aws",
 			BlockedPatterns: []string{"terminate-instances"},
 			Description:     "Block AWS terminate instances",
 		},
 		{
-			Command:         "kubectl",
+			BlockedCommand:  "kubectl",
 			BlockedPatterns: []string{"delete"},
-			AllowExceptions: []string{"delete pod"},
+			AllowedPatterns: []string{"delete pod"},
 			Description:     "Block kubectl delete with exceptions",
 		},
 	}
@@ -380,9 +380,9 @@ func TestCommandDetector_InterspersedFlags(t *testing.T) {
 func TestCommandDetector_ProximityLimits(t *testing.T) {
 	rules := []CommandRule{
 		{
-			Command:         "kubectl",
+			BlockedCommand:  "kubectl",
 			BlockedPatterns: []string{"delete"},
-			AllowExceptions: []string{"delete pod"},
+			AllowedPatterns: []string{"delete pod"},
 			Description:     "Block kubectl delete with pod exception",
 		},
 	}
