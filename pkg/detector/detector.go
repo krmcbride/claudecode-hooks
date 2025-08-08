@@ -6,8 +6,6 @@ import (
 	"strings"
 
 	"mvdan.cc/sh/v3/syntax"
-
-	"github.com/krmcbride/claudecode-hooks/pkg/shellparse"
 )
 
 // CommandRule defines what commands and patterns to detect
@@ -70,7 +68,7 @@ func (d *CommandDetector) analyzeCommandRecursive(shellExpr string) bool {
 	defer func() { d.currentDepth-- }()
 
 	// Parse shell expression into an AST
-	ast, err := shellparse.ParseShellExpression(shellExpr)
+	ast, err := parseShellExpression(shellExpr)
 	if err != nil {
 		// Safety principle: If we can't understand it, don't run it
 		d.addIssue("Unable to parse shell expression: " + err.Error())
@@ -78,7 +76,7 @@ func (d *CommandDetector) analyzeCommandRecursive(shellExpr string) bool {
 	}
 
 	// Extract command calls from the AST
-	calls := shellparse.ExtractCallExprs(ast)
+	calls := extractCallExprs(ast)
 
 	// Check if any command call should be blocked
 	return slices.ContainsFunc(calls, d.analyzeCallExpr)
@@ -91,7 +89,7 @@ func (d *CommandDetector) analyzeCallExpr(call *syntax.CallExpr) bool {
 	}
 
 	// Extract command name
-	cmd, cmdIsStatic := shellparse.ResolveStaticWord(call.Args[0])
+	cmd, cmdIsStatic := resolveStaticWord(call.Args[0])
 
 	// Check dynamic commands
 	if d.checkDynamicCommand(cmdIsStatic) {
@@ -144,7 +142,7 @@ func (d *CommandDetector) checkShellInterpreter(call *syntax.CallExpr, cmd strin
 	d.addIssue("Shell interpreter detected: " + cmd)
 
 	// Recursively analyze wrapped commands
-	if commands, _ := shellparse.ExtractShellCommands(call); len(commands) > 0 {
+	if commands, _ := extractShellCommands(call); len(commands) > 0 {
 		for _, shellCmd := range commands {
 			if d.analyzeCommandRecursive(shellCmd) {
 				d.addIssue("Blocked command in shell: " + shellCmd)
@@ -164,7 +162,7 @@ func (d *CommandDetector) checkEvalCommand(call *syntax.CallExpr, cmd string) bo
 	d.addIssue("Eval/source command detected: " + cmd)
 
 	// Recursively analyze eval content
-	if evalContent := shellparse.AnalyzeEvalCommand(call); len(evalContent) > 0 {
+	if evalContent := analyzeEvalCommand(call); len(evalContent) > 0 {
 		for _, content := range evalContent {
 			if d.analyzeCommandRecursive(content) {
 				d.addIssue("Blocked command in eval: " + content)
@@ -223,7 +221,7 @@ func (d *CommandDetector) checkRuleMatch(call *syntax.CallExpr, cmd string, rule
 func (d *CommandDetector) extractArguments(args []*syntax.Word, command string) ([]string, bool) {
 	result := make([]string, 0, len(args))
 	for _, arg := range args {
-		argVal, argIsStatic := shellparse.ResolveStaticWord(arg)
+		argVal, argIsStatic := resolveStaticWord(arg)
 
 		// Check for dynamic subcommands
 		if !argIsStatic {
@@ -266,7 +264,7 @@ func (d *CommandDetector) checkXargsCommand(call *syntax.CallExpr, cmd string) b
 
 	// Check for blocked commands in xargs arguments
 	for _, arg := range call.Args[1:] {
-		argStr, _ := shellparse.ResolveStaticWord(arg)
+		argStr, _ := resolveStaticWord(arg)
 		for _, rule := range d.commandRules {
 			if isMatchingCommand(argStr, rule.Command) {
 				d.addIssue("Blocked command passed to xargs: " + argStr)
@@ -286,7 +284,7 @@ func (d *CommandDetector) checkFindExecCommand(call *syntax.CallExpr, cmd string
 	// Look for -exec flags
 	execIndex := -1
 	for i, arg := range call.Args[1:] {
-		argStr, _ := shellparse.ResolveStaticWord(arg)
+		argStr, _ := resolveStaticWord(arg)
 		if argStr == "-exec" || argStr == "-execdir" || argStr == "-ok" {
 			execIndex = i
 			d.addIssue("find with -exec detected which can execute commands")
@@ -300,7 +298,7 @@ func (d *CommandDetector) checkFindExecCommand(call *syntax.CallExpr, cmd string
 
 	// Check for blocked commands after -exec
 	if execIndex+2 < len(call.Args) {
-		nextArg, _ := shellparse.ResolveStaticWord(call.Args[execIndex+2])
+		nextArg, _ := resolveStaticWord(call.Args[execIndex+2])
 		for _, rule := range d.commandRules {
 			if isMatchingCommand(nextArg, rule.Command) {
 				d.addIssue("Blocked command in find -exec: " + nextArg)
@@ -327,7 +325,7 @@ func (d *CommandDetector) checkObfuscation(call *syntax.CallExpr) bool {
 	content := d.collectStaticContent(call)
 
 	// Check for base64/hex encoding
-	if obfuscated, obfIssues := shellparse.DetectObfuscation(content); obfuscated {
+	if obfuscated, obfIssues := detectObfuscation(content); obfuscated {
 		d.issues = append(d.issues, obfIssues...)
 		return true // BLOCK
 	}
@@ -340,7 +338,7 @@ func (d *CommandDetector) checkObfuscation(call *syntax.CallExpr) bool {
 func (d *CommandDetector) collectStaticContent(call *syntax.CallExpr) string {
 	var allContent strings.Builder
 	for _, arg := range call.Args {
-		val, isStatic := shellparse.ResolveStaticWord(arg)
+		val, isStatic := resolveStaticWord(arg)
 		if isStatic && val != "" {
 			allContent.WriteString(val)
 			allContent.WriteString(" ")
@@ -351,13 +349,13 @@ func (d *CommandDetector) collectStaticContent(call *syntax.CallExpr) string {
 
 // checkEchoEscapes checks for echo with escape sequences
 func (d *CommandDetector) checkEchoEscapes(call *syntax.CallExpr) bool {
-	cmd, _ := shellparse.ResolveStaticWord(call.Args[0])
+	cmd, _ := resolveStaticWord(call.Args[0])
 	if !isEchoCommand(cmd) {
 		return false
 	}
 
 	for _, arg := range call.Args[1:] {
-		argStr, _ := shellparse.ResolveStaticWord(arg)
+		argStr, _ := resolveStaticWord(arg)
 
 		// Check for hex escapes
 		if strings.Contains(argStr, "\\x") || strings.Contains(argStr, "\\0") {
