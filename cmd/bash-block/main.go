@@ -54,13 +54,13 @@ func main() {
 
 	// Parse patterns and allow list
 	blockedPatterns := utils.ParseCommaSeparated(*patterns)
-	allowExceptions := utils.ParseCommaSeparated(*allowList)
+	allowedPatterns := utils.ParseCommaSeparated(*allowList)
 
 	// Create command rule
 	rule := detector.CommandRule{
-		Command:         *command,
+		BlockedCommand:  *command,
 		BlockedPatterns: blockedPatterns,
-		AllowExceptions: allowExceptions,
+		AllowedPatterns: allowedPatterns,
 		Description:     *description,
 	}
 

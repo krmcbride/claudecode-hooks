@@ -10,9 +10,9 @@ import (
 
 // CommandRule defines what commands and patterns to detect
 type CommandRule struct {
-	Command         string   // Primary command (git, aws, kubectl)
+	BlockedCommand  string   // Primary command to block (git, aws, kubectl)
 	BlockedPatterns []string // Subcommand patterns to block
-	AllowExceptions []string // Patterns to allow despite blocks
+	AllowedPatterns []string // Patterns to allow despite blocks
 	Description     string   // Human readable description
 }
 
@@ -186,7 +186,7 @@ func (d *CommandDetector) checkDirectCommand(call *syntax.CallExpr, cmd string) 
 // checkRuleMatch checks if a command matches a specific rule
 func (d *CommandDetector) checkRuleMatch(call *syntax.CallExpr, cmd string, rule CommandRule) bool {
 	// Check if command matches this rule
-	if !isMatchingCommand(cmd, rule.Command) {
+	if !isMatchingCommand(cmd, rule.BlockedCommand) {
 		return false
 	}
 
@@ -196,21 +196,21 @@ func (d *CommandDetector) checkRuleMatch(call *syntax.CallExpr, cmd string, rule
 	}
 
 	// Extract and validate arguments
-	args, hasDynamic := d.extractArguments(call.Args[1:], rule.Command)
+	args, hasDynamic := d.extractArguments(call.Args[1:], rule.BlockedCommand)
 	if hasDynamic {
 		return true // BLOCK: Dynamic subcommand
 	}
 
 	fullArgs := strings.Join(args, " ")
 
-	// Check allow exceptions first
-	if hasAllowException(fullArgs, rule.AllowExceptions) {
+	// Check allowed patterns first
+	if hasAllowedException(fullArgs, rule.AllowedPatterns) {
 		return false // ALLOW
 	}
 
 	// Check blocked patterns
 	if hasBlockedPattern(fullArgs, rule.BlockedPatterns) {
-		d.addIssue("Blocked " + rule.Command + " pattern detected")
+		d.addIssue("Blocked " + rule.BlockedCommand + " pattern detected")
 		return true // BLOCK
 	}
 
@@ -266,7 +266,7 @@ func (d *CommandDetector) checkXargsCommand(call *syntax.CallExpr, cmd string) b
 	for _, arg := range call.Args[1:] {
 		argStr, _ := resolveStaticWord(arg)
 		for _, rule := range d.commandRules {
-			if isMatchingCommand(argStr, rule.Command) {
+			if isMatchingCommand(argStr, rule.BlockedCommand) {
 				d.addIssue("Blocked command passed to xargs: " + argStr)
 				return true // BLOCK
 			}
@@ -300,7 +300,7 @@ func (d *CommandDetector) checkFindExecCommand(call *syntax.CallExpr, cmd string
 	if execIndex+2 < len(call.Args) {
 		nextArg, _ := resolveStaticWord(call.Args[execIndex+2])
 		for _, rule := range d.commandRules {
-			if isMatchingCommand(nextArg, rule.Command) {
+			if isMatchingCommand(nextArg, rule.BlockedCommand) {
 				d.addIssue("Blocked command in find -exec: " + nextArg)
 				return true // BLOCK
 			}
