@@ -12,8 +12,6 @@ import (
 type CommandRule struct {
 	BlockedCommand  string   // Primary command to block (git, aws, kubectl)
 	BlockedPatterns []string // Subcommand patterns to block
-	AllowedPatterns []string // Patterns to allow despite blocks
-	Description     string   // Human readable description
 }
 
 // CommandDetector provides command detection for safety validation
@@ -190,28 +188,33 @@ func (d *CommandDetector) checkRuleMatch(call *syntax.CallExpr, cmd string, rule
 		return false
 	}
 
-	// Need arguments for pattern matching
-	if len(call.Args) < 2 {
-		return false
-	}
-
-	// Extract and validate arguments
-	args, hasDynamic := d.extractArguments(call.Args[1:], rule.BlockedCommand)
-	if hasDynamic {
-		return true // BLOCK: Dynamic subcommand
-	}
-
-	fullArgs := strings.Join(args, " ")
-
-	// Check allowed patterns first
-	if hasAllowedException(fullArgs, rule.AllowedPatterns) {
-		return false // ALLOW
+	// Extract arguments if any exist
+	var fullArgs string
+	if len(call.Args) > 1 {
+		// Extract and validate arguments
+		args, hasDynamic := d.extractArguments(call.Args[1:], rule.BlockedCommand)
+		if hasDynamic {
+			return true // BLOCK: Dynamic subcommand
+		}
+		fullArgs = strings.Join(args, " ")
 	}
 
 	// Check blocked patterns
-	if hasBlockedPattern(fullArgs, rule.BlockedPatterns) {
-		d.addIssue("Blocked " + rule.BlockedCommand + " pattern detected")
-		return true // BLOCK
+	// If no arguments and pattern is "*", block the command
+	// If no arguments and specific patterns, don't block (command alone is OK)
+	// If arguments exist, check against patterns
+	if len(rule.BlockedPatterns) > 0 {
+		if hasBlockedPattern(fullArgs, rule.BlockedPatterns) {
+			d.addIssue("Blocked " + rule.BlockedCommand + " pattern detected")
+			return true // BLOCK
+		}
+		// Special case: wildcard pattern blocks even commands with no args
+		for _, pattern := range rule.BlockedPatterns {
+			if pattern == "*" {
+				d.addIssue("Blocked " + rule.BlockedCommand + " command")
+				return true // BLOCK
+			}
+		}
 	}
 
 	return false
