@@ -1,21 +1,20 @@
-// Package shellparse provides shell command parsing utilities.
-package shellparse
+// Package detector - internal shell parsing utilities
+package detector
 
 import (
 	"fmt"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	"mvdan.cc/sh/v3/syntax"
 )
 
-// ParseShellExpression parses a shell expression into an Abstract Syntax Tree.
+// parseShellExpression parses a shell expression into an Abstract Syntax Tree.
 // The input shellExpr can be a simple command ("ls -la") or a complex expression
 // with pipes, conditionals, loops, and subshells ("cd /tmp && git pull || echo failed").
 // Returns the AST root node which can be traversed to extract various elements
 // like command calls, redirections, variables, etc.
-func ParseShellExpression(shellExpr string) (syntax.Node, error) {
+func parseShellExpression(shellExpr string) (syntax.Node, error) {
 	parser := syntax.NewParser()
 	node, err := parser.Parse(strings.NewReader(shellExpr), "")
 	if err != nil {
@@ -24,11 +23,11 @@ func ParseShellExpression(shellExpr string) (syntax.Node, error) {
 	return node, nil
 }
 
-// ExtractCallExprs walks the AST and collects all command call expressions.
+// extractCallExprs walks the AST and collects all command call expressions.
 // These represent actual command invocations (e.g., "git push", "echo hello").
 // The traversal is depth-first, capturing commands in nested structures like
 // subshells, conditionals, and loops.
-func ExtractCallExprs(node syntax.Node) []*syntax.CallExpr {
+func extractCallExprs(node syntax.Node) []*syntax.CallExpr {
 	var calls []*syntax.CallExpr
 	syntax.Walk(node, func(n syntax.Node) bool {
 		if call, ok := n.(*syntax.CallExpr); ok {
@@ -39,10 +38,10 @@ func ExtractCallExprs(node syntax.Node) []*syntax.CallExpr {
 	return calls
 }
 
-// ResolveStaticWord attempts to resolve a word into a static string.
+// resolveStaticWord attempts to resolve a word into a static string.
 // It returns the resolved string and a boolean indicating if the resolution is complete
 // (i.e., the word contained no dynamic parts like variables or command substitutions).
-func ResolveStaticWord(word *syntax.Word) (val string, isStatic bool) {
+func resolveStaticWord(word *syntax.Word) (val string, isStatic bool) {
 	if word == nil {
 		return "", true
 	}
@@ -99,8 +98,8 @@ func ResolveStaticWord(word *syntax.Word) (val string, isStatic bool) {
 	return sb.String(), isStatic
 }
 
-// NormalizeCommandPath normalizes a command path for comparison
-func NormalizeCommandPath(cmd string) string {
+// normalizeCommandPath normalizes a command path for comparison
+func normalizeCommandPath(cmd string) string {
 	// Clean the path
 	cleaned := filepath.Clean(cmd)
 
@@ -113,20 +112,20 @@ func NormalizeCommandPath(cmd string) string {
 	return base
 }
 
-// ExtractShellCommands extracts shell commands from common shell interpreter patterns
+// extractShellCommands extracts shell commands from common shell interpreter patterns
 // Returns commands found and a boolean indicating if dynamic content was detected
-func ExtractShellCommands(call *syntax.CallExpr) ([]string, bool) {
+func extractShellCommands(call *syntax.CallExpr) ([]string, bool) {
 	if len(call.Args) < 2 {
 		return nil, false
 	}
 
-	cmd, cmdIsStatic := ResolveStaticWord(call.Args[0])
+	cmd, cmdIsStatic := resolveStaticWord(call.Args[0])
 	if !cmdIsStatic {
 		return nil, true // Dynamic command itself
 	}
 
 	// Normalize command name
-	cmdName := NormalizeCommandPath(cmd)
+	cmdName := normalizeCommandPath(cmd)
 
 	// Check if this is a shell interpreter
 	if !isShellInterpreter(cmdName) {
@@ -138,7 +137,7 @@ func ExtractShellCommands(call *syntax.CallExpr) ([]string, bool) {
 
 	// Look for -c flag
 	for i := 1; i < len(call.Args); i++ {
-		arg, argIsStatic := ResolveStaticWord(call.Args[i])
+		arg, argIsStatic := resolveStaticWord(call.Args[i])
 		if !argIsStatic {
 			// SAFETY: Don't skip dynamic arguments - they need verification
 			hasDynamicContent = true
@@ -147,7 +146,7 @@ func ExtractShellCommands(call *syntax.CallExpr) ([]string, bool) {
 
 		// If we find -c, the next argument should be the command
 		if arg == "-c" && i+1 < len(call.Args) {
-			cmdStr, cmdStrIsStatic := ResolveStaticWord(call.Args[i+1])
+			cmdStr, cmdStrIsStatic := resolveStaticWord(call.Args[i+1])
 			if !cmdStrIsStatic {
 				// SAFETY: Dynamic shell command content cannot be verified
 				hasDynamicContent = true
@@ -161,22 +160,13 @@ func ExtractShellCommands(call *syntax.CallExpr) ([]string, bool) {
 	return commands, hasDynamicContent
 }
 
-// isShellInterpreter checks if a command is a shell interpreter
-func isShellInterpreter(cmd string) bool {
-	shellCommands := []string{
-		"sh", "bash", "zsh", "dash", "ksh", "csh", "tcsh", "fish",
-	}
-
-	return slices.Contains(shellCommands, cmd)
-}
-
-// AnalyzeEvalCommand analyzes eval commands to extract their content
-func AnalyzeEvalCommand(call *syntax.CallExpr) []string {
+// analyzeEvalCommand analyzes eval commands to extract their content
+func analyzeEvalCommand(call *syntax.CallExpr) []string {
 	if len(call.Args) < 2 {
 		return nil
 	}
 
-	cmd, cmdIsStatic := ResolveStaticWord(call.Args[0])
+	cmd, cmdIsStatic := resolveStaticWord(call.Args[0])
 	if !cmdIsStatic || cmd != "eval" {
 		return nil
 	}
@@ -185,7 +175,7 @@ func AnalyzeEvalCommand(call *syntax.CallExpr) []string {
 
 	// Collect all arguments to eval (they get concatenated)
 	for i := 1; i < len(call.Args); i++ {
-		arg, argIsStatic := ResolveStaticWord(call.Args[i])
+		arg, argIsStatic := resolveStaticWord(call.Args[i])
 		if argIsStatic && arg != "" {
 			evalContent = append(evalContent, arg)
 		}
@@ -194,8 +184,8 @@ func AnalyzeEvalCommand(call *syntax.CallExpr) []string {
 	return evalContent
 }
 
-// DetectObfuscation performs basic obfuscation detection on a string
-func DetectObfuscation(s string) (bool, []string) {
+// detectObfuscation performs basic obfuscation detection on a string
+func detectObfuscation(s string) (bool, []string) {
 	var issues []string
 	detected := false
 
