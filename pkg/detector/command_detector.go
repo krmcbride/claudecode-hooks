@@ -1,4 +1,4 @@
-// Package detector provides generic command detection logic with configurable rules
+// Package detector provides command detection logic with configurable rules
 package detector
 
 import (
@@ -20,13 +20,10 @@ type CommandRule struct {
 
 // CommandDetector provides comprehensive command detection with maximum security
 type CommandDetector struct {
-	commandRules        []CommandRule
-	issues              []string
-	maxDepth            int
-	currentDepth        int
-	patternMatcher      *PatternMatcher
-	securityChecker     *SecurityChecker
-	obfuscationDetector *ObfuscationDetector
+	commandRules []CommandRule
+	issues       []string
+	maxDepth     int
+	currentDepth int
 }
 
 // NewCommandDetector creates a new detector with maximum security
@@ -35,18 +32,11 @@ func NewCommandDetector(rules []CommandRule, maxDepth int) *CommandDetector {
 		maxDepth = 10 // Default safe recursion limit
 	}
 
-	patternMatcher := NewPatternMatcher()
-	securityChecker := NewSecurityChecker(patternMatcher)
-	obfuscationDetector := NewObfuscationDetector(patternMatcher)
-
 	return &CommandDetector{
-		commandRules:        rules,
-		issues:              make([]string, 0),
-		maxDepth:            maxDepth,
-		currentDepth:        0,
-		patternMatcher:      patternMatcher,
-		securityChecker:     securityChecker,
-		obfuscationDetector: obfuscationDetector,
+		commandRules: rules,
+		issues:       make([]string, 0),
+		maxDepth:     maxDepth,
+		currentDepth: 0,
 	}
 }
 
@@ -62,194 +52,317 @@ func (d *CommandDetector) GetIssues() []string {
 
 // ShouldBlockCommand determines if a command should be blocked.
 // Returns true if command should be BLOCKED, false if allowed.
-// This is the main entry point that resets state and delegates to recursive analysis.
 func (d *CommandDetector) ShouldBlockCommand(command string) bool {
-	// Reset recursion tracking for new analysis
+	// Reset state for new analysis
 	d.currentDepth = 0
-	// Clear any issues from previous analysis (reuse slice for efficiency)
 	d.issues = d.issues[:0]
-	return d.shouldBlockCommandRecursive(command)
+	return d.analyzeCommandRecursive(command)
 }
 
-// shouldBlockCommandRecursive performs comprehensive analysis with recursion tracking.
-// This handles nested commands like "sh -c 'git push'" or "eval $(echo git push)".
-// Returns true if command should be BLOCKED.
-func (d *CommandDetector) shouldBlockCommandRecursive(command string) bool {
-	// Increment recursion depth to prevent DoS attacks via deeply nested commands
+// analyzeCommandRecursive performs analysis with recursion tracking
+func (d *CommandDetector) analyzeCommandRecursive(command string) bool {
+	// Prevent DoS via deeply nested commands
 	d.currentDepth++
 	if d.currentDepth > d.maxDepth {
 		d.issues = append(d.issues, "Max recursion depth exceeded - potential DoS attempt")
-		return true // BLOCK: Suspicious deep nesting
+		return true // BLOCK
 	}
-	// Ensure depth counter is decremented when function exits
 	defer func() { d.currentDepth-- }()
 
-	// Parse command string into structured call expressions using mvdan.cc/sh
-	// This handles complex shell syntax: pipes, redirects, subshells, etc.
+	// Parse command into structured call expressions
 	calls, err := shellparse.ParseCommand(command)
 	if err != nil {
-		// FAIL-SECURE: If we can't parse it, assume it's malicious
-		// Better to block legitimate edge cases than allow attacks
+		// FAIL-SECURE: Can't parse = block
 		d.issues = append(d.issues, "Failed to parse command: "+err.Error())
-		return true // BLOCK: Unparseable commands
+		return true // BLOCK
 	}
 
-	// Analyze each parsed call expression (commands in pipes, subshells, etc.)
-	// Returns true if ANY call should be blocked
+	// Check if any call should be blocked
 	return slices.ContainsFunc(calls, d.analyzeCallExpr)
 }
 
-// analyzeCallExpr analyzes a single call expression for all security threats.
-// This is the core detection logic that runs multiple security checks:
-// 1. Direct command pattern matching (git push, aws terminate-instances)
-// 2. Shell interpreter detection (sh -c, bash -c)
-// 3. Eval command detection (eval, source)
-// 4. Execution pattern detection (xargs, find -exec)
-// 5. Obfuscation detection (base64, hex encoding)
-// Returns true if call should be BLOCKED.
+// analyzeCallExpr analyzes a single call expression for threats
 func (d *CommandDetector) analyzeCallExpr(call *syntax.CallExpr) bool {
-	// Skip empty calls (shouldn't happen with valid shell syntax)
 	if len(call.Args) == 0 {
 		return false // ALLOW: Empty call
 	}
 
-	// Extract the command name from call.Args[0]
-	// cmd = resolved command string, cmdIsStatic = true if not using variables/substitution
+	// Extract command name
 	cmd, cmdIsStatic := shellparse.ResolveStaticWord(call.Args[0])
 
-	// SECURITY CHECK 1: Block dynamic commands (using variables/substitution)
-	// Examples: $CMD push, $(echo git) push, `whoami` push
-	if blocked, issues := d.securityChecker.CheckDynamicCommand(cmdIsStatic); blocked {
-		d.issues = append(d.issues, issues...)
-		return true // BLOCK: Dynamic command name
+	// Block dynamic commands (variables/substitution)
+	if !cmdIsStatic {
+		d.issues = append(d.issues, "Command uses dynamic substitution which could hide malicious intent")
+		return true // BLOCK
 	}
 
-	// SECURITY CHECK 2: Direct command pattern matching
-	// This is where "git push", "aws terminate-instances", etc. get detected
-	// Handles interspersed flags: "aws --region us-east-1 ec2 terminate-instances"
+	// Check direct command patterns
 	if d.checkDirectCommand(call, cmd) {
-		return true // BLOCK: Matched configured rule
+		return true // BLOCK
 	}
 
-	// SECURITY CHECK 3: Shell interpreter detection
-	// Detects: sh -c 'command', bash -c 'command', zsh -c 'command'
-	// These are common ways to bypass detection by wrapping commands
-	if blocked, issues := d.securityChecker.CheckShellInterpreter(call, d.commandRules); blocked {
-		d.issues = append(d.issues, issues...)
-		// RECURSIVE ANALYSIS: Extract and analyze the wrapped commands
-		// Example: "sh -c 'git push'" -> recursively analyze "git push"
-		shellCommands, _ := shellparse.ExtractShellCommands(call)
-		for _, shellCmd := range shellCommands {
-			if d.shouldBlockCommandRecursive(shellCmd) {
-				d.issues = append(d.issues, "Blocked command detected in shell command: "+shellCmd)
-				return true // BLOCK: Nested command matched
+	// Check for shell interpreters (sh -c, bash -c)
+	if d.isShellInterpreter(cmd) {
+		d.issues = append(d.issues, "Shell interpreter detected: "+cmd)
+		// Recursively analyze wrapped commands
+		if commands, _ := shellparse.ExtractShellCommands(call); len(commands) > 0 {
+			for _, shellCmd := range commands {
+				if d.analyzeCommandRecursive(shellCmd) {
+					d.issues = append(d.issues, "Blocked command in shell: "+shellCmd)
+					return true // BLOCK
+				}
 			}
 		}
-		return true // BLOCK: Shell interpreter detected (even if nested analysis didn't find issues)
+		// Block shell interpreters even without detected nested commands
+		return true // BLOCK
 	}
 
-	// SECURITY CHECK 4: Eval command detection
-	// Detects: eval 'command', source script.sh, . script.sh
-	// These execute dynamic content and are common attack vectors
-	if blocked, issues := d.securityChecker.CheckEvalCommand(call, cmd, d.commandRules); blocked {
-		d.issues = append(d.issues, issues...)
-		// RECURSIVE ANALYSIS: Extract and analyze eval content
-		// Example: "eval 'git push'" -> recursively analyze "git push"
-		evalContent := shellparse.AnalyzeEvalCommand(call)
-		if slices.ContainsFunc(evalContent, d.shouldBlockCommandRecursive) {
-			d.issues = append(d.issues, "Blocked command detected in eval command")
-			return true // BLOCK: Nested command in eval matched
+	// Check for eval/source commands
+	if d.isEvalCommand(cmd) {
+		d.issues = append(d.issues, "Eval/source command detected: "+cmd)
+		// Recursively analyze eval content
+		if evalContent := shellparse.AnalyzeEvalCommand(call); len(evalContent) > 0 {
+			for _, content := range evalContent {
+				if d.analyzeCommandRecursive(content) {
+					d.issues = append(d.issues, "Blocked command in eval: "+content)
+					return true // BLOCK
+				}
+			}
 		}
-		return true // BLOCK: Eval pattern detected (even if nested analysis didn't find issues)
+		return true // BLOCK
 	}
 
-	// SECURITY CHECK 5: Other execution patterns
-	// Detects: xargs, find -exec, parallel, etc.
-	// These can execute commands and bypass simple pattern matching
-	if blocked, issues := d.securityChecker.CheckExecutionPatterns(call, cmd, d.commandRules); blocked {
-		d.issues = append(d.issues, issues...)
-		return true // BLOCK: Execution pattern detected
+	// Check for execution patterns (xargs, find -exec)
+	if d.checkExecutionPatterns(call, cmd) {
+		return true // BLOCK
 	}
 
-	// SECURITY CHECK 6: Obfuscation detection
-	// Detects: base64 encoding, hex encoding, character escaping
-	// Examples: echo cHVzaA== | base64 -d, echo -e "\x70\x75\x73\x68"
-	if blocked, issues := d.obfuscationDetector.CheckObfuscationPatterns(call, d.commandRules); blocked {
-		d.issues = append(d.issues, issues...)
-		return true // BLOCK: Obfuscation detected
+	// Check for obfuscation
+	if d.checkObfuscation(call) {
+		return true // BLOCK
 	}
 
-	return false // ALLOW: No threats detected
+	return false // ALLOW
 }
 
-// checkDirectCommand checks for direct command matches with configured rules.
-// This is where the main pattern matching happens for commands like:
-//
-//	"git push" -> matches rule.Command="git", rule.BlockedPatterns=["push"]
-//	"aws --region us-east-1 ec2 terminate-instances" -> extracts all args after "aws"
-//
-// IMPORTANT: This function handles interspersed flags by including ALL arguments
-// in pattern matching, not just subcommands. The PatternMatcher uses proximity
-// logic to find patterns within the full argument string.
-//
-// LIMITATION: 20-character proximity limit can cause issues with long flags!
+// checkDirectCommand checks for direct command matches with configured rules
 func (d *CommandDetector) checkDirectCommand(call *syntax.CallExpr, cmd string) bool {
-	// Check each configured rule (git, aws, kubectl, etc.)
 	for _, rule := range d.commandRules {
-		// Skip if command doesn't match this rule
-		// Handles: git, /usr/bin/git, ./git, git.exe
-		if !d.patternMatcher.IsMatchingCommand(cmd, rule.Command) {
+		// Check if command matches this rule
+		if !d.isMatchingCommand(cmd, rule.Command) {
 			continue
 		}
 
-		// Skip if no arguments (need subcommand for pattern matching)
-		// Example: just "git" with no args -> nothing to check
+		// Need arguments for pattern matching
 		if len(call.Args) < 2 {
 			continue
 		}
 
-		// Extract ALL arguments after the command name
-		// call.Args[0] = command ("git", "aws", etc.)
-		// call.Args[1:] = ALL flags and subcommands mixed together
-		// Example: ["--region", "us-east-1", "ec2", "terminate-instances", "--instance-ids", "i-123"]
+		// Extract all arguments
 		args := make([]string, 0, len(call.Args)-1)
 		for _, arg := range call.Args[1:] {
-			// Resolve argument (handle quoted strings, escape sequences, etc.)
 			argVal, argIsStatic := shellparse.ResolveStaticWord(arg)
 
-			// SECURITY: Block dynamic subcommands (using variables/substitution)
-			// Examples: git $ACTION, aws $(echo delete-bucket)
-			if blocked, issues := d.securityChecker.CheckDynamicSubcommand(argIsStatic, rule.Command); blocked {
-				d.issues = append(d.issues, issues...)
-				return true // BLOCK: Dynamic subcommand
+			// Block dynamic subcommands
+			if !argIsStatic {
+				d.issues = append(d.issues, rule.Command+" uses dynamic subcommand")
+				return true // BLOCK
 			}
 
-			// Only include static arguments in pattern matching
-			// This filters out unresolved variables while keeping flags and subcommands
-			if argIsStatic {
-				args = append(args, argVal)
-			}
+			args = append(args, argVal)
 		}
 
-		// Create full argument string for pattern matching
-		// Example: "--region us-east-1 ec2 terminate-instances --instance-ids i-123"
 		fullArgs := strings.Join(args, " ")
 
-		// STEP 1: Check allow exceptions FIRST (fail-fast for legitimate commands)
-		// Example: "delete pod" exception allows "kubectl delete pod my-app"
-		// WARNING: Subject to 20-char proximity limit! Long flags can break exceptions.
-		if d.patternMatcher.HasAllowException(fullArgs, rule.AllowExceptions) {
-			continue // ALLOW: Matches exception pattern
+		// Check allow exceptions first
+		if d.hasAllowException(fullArgs, rule.AllowExceptions) {
+			continue // ALLOW
 		}
 
-		// STEP 2: Check blocked patterns (only if no exception matched)
-		// Example: "terminate-instances" pattern blocks AWS terminate commands
-		// This uses both individual args and fullArgs for flexible matching
-		if d.patternMatcher.HasBlockedPattern(args, fullArgs, rule) {
+		// Check blocked patterns
+		if d.hasBlockedPattern(fullArgs, rule.BlockedPatterns) {
 			d.issues = append(d.issues, "Blocked "+rule.Command+" pattern detected")
-			return true // BLOCK: Matches blocked pattern
+			return true // BLOCK
 		}
 	}
 
-	return false // ALLOW: No rules matched
+	return false // ALLOW
+}
+
+// isMatchingCommand checks if cmd matches the rule command
+func (d *CommandDetector) isMatchingCommand(cmd, ruleCmd string) bool {
+	// Direct match
+	if cmd == ruleCmd {
+		return true
+	}
+
+	// Check if cmd ends with the rule command (handles paths)
+	// Examples: /usr/bin/git, ./git, git.exe
+	if strings.HasSuffix(cmd, "/"+ruleCmd) || strings.HasSuffix(cmd, "\\"+ruleCmd) {
+		return true
+	}
+
+	// Check for .exe on Windows
+	if strings.HasSuffix(cmd, ".exe") {
+		baseName := strings.TrimSuffix(cmd, ".exe")
+		return d.isMatchingCommand(baseName, ruleCmd)
+	}
+
+	return false
+}
+
+// hasAllowException checks if text matches any allow exception patterns
+func (d *CommandDetector) hasAllowException(text string, exceptions []string) bool {
+	if len(exceptions) == 0 {
+		return false
+	}
+
+	textLower := strings.ToLower(text)
+	for _, exception := range exceptions {
+		// Check if all words in the exception pattern exist in the text
+		// No proximity limit - just check existence
+		words := strings.Fields(strings.ToLower(exception))
+		allFound := true
+		for _, word := range words {
+			if !strings.Contains(textLower, word) {
+				allFound = false
+				break
+			}
+		}
+		if allFound {
+			return true
+		}
+	}
+	return false
+}
+
+// hasBlockedPattern checks if text matches any blocked patterns
+func (d *CommandDetector) hasBlockedPattern(text string, patterns []string) bool {
+	if len(patterns) == 0 {
+		return false
+	}
+
+	textLower := strings.ToLower(text)
+	for _, pattern := range patterns {
+		// Simple substring matching
+		if strings.Contains(textLower, strings.ToLower(pattern)) {
+			return true
+		}
+	}
+	return false
+}
+
+// isShellInterpreter checks if the command is a shell interpreter
+func (d *CommandDetector) isShellInterpreter(cmd string) bool {
+	shells := []string{"sh", "bash", "zsh", "ksh", "fish", "dash", "ash", "csh", "tcsh"}
+	cmdBase := strings.TrimPrefix(cmd, "/usr/bin/")
+	cmdBase = strings.TrimPrefix(cmdBase, "/bin/")
+	cmdBase = strings.TrimSuffix(cmdBase, ".exe")
+
+	return slices.Contains(shells, cmdBase)
+}
+
+// isEvalCommand checks if the command evaluates/sources code
+func (d *CommandDetector) isEvalCommand(cmd string) bool {
+	evalCmds := []string{"eval", "source", "."}
+	return slices.Contains(evalCmds, cmd)
+}
+
+// checkExecutionPatterns checks for other execution patterns
+func (d *CommandDetector) checkExecutionPatterns(call *syntax.CallExpr, cmd string) bool {
+	// Check xargs
+	if strings.Contains(cmd, "xargs") {
+		d.issues = append(d.issues, "xargs command detected which can execute piped commands")
+		// Check for patterns in xargs arguments
+		for _, arg := range call.Args[1:] {
+			argStr, _ := shellparse.ResolveStaticWord(arg)
+			for _, rule := range d.commandRules {
+				if d.isMatchingCommand(argStr, rule.Command) {
+					d.issues = append(d.issues, "Blocked command passed to xargs: "+argStr)
+					return true // BLOCK
+				}
+			}
+		}
+		return true // BLOCK xargs itself
+	}
+
+	// Check find -exec
+	if cmd == "find" || strings.HasSuffix(cmd, "/find") {
+		hasExec := false
+		for _, arg := range call.Args[1:] {
+			argStr, _ := shellparse.ResolveStaticWord(arg)
+			if argStr == "-exec" || argStr == "-execdir" || argStr == "-ok" {
+				hasExec = true
+				d.issues = append(d.issues, "find with -exec detected which can execute commands")
+				break
+			}
+		}
+		if hasExec {
+			// Check for blocked commands in exec arguments
+			for i, arg := range call.Args[1:] {
+				argStr, _ := shellparse.ResolveStaticWord(arg)
+				if argStr == "-exec" || argStr == "-execdir" || argStr == "-ok" {
+					if i+1 < len(call.Args)-1 {
+						nextArg, _ := shellparse.ResolveStaticWord(call.Args[i+2])
+						for _, rule := range d.commandRules {
+							if d.isMatchingCommand(nextArg, rule.Command) {
+								d.issues = append(d.issues, "Blocked command in find -exec: "+nextArg)
+								return true // BLOCK
+							}
+						}
+					}
+				}
+			}
+			return true // BLOCK find -exec
+		}
+	}
+
+	// Check GNU parallel
+	if strings.Contains(cmd, "parallel") {
+		d.issues = append(d.issues, "GNU parallel detected which can execute multiple commands")
+		return true // BLOCK
+	}
+
+	return false
+}
+
+// checkObfuscation checks for obfuscated commands
+func (d *CommandDetector) checkObfuscation(call *syntax.CallExpr) bool {
+	// Collect all static string content for analysis
+	var allContent strings.Builder
+	for _, arg := range call.Args {
+		val, isStatic := shellparse.ResolveStaticWord(arg)
+		if isStatic && val != "" {
+			allContent.WriteString(val)
+			allContent.WriteString(" ")
+		}
+	}
+
+	content := allContent.String()
+
+	// Check for base64/hex encoding indicators
+	if obfuscated, obfIssues := shellparse.DetectObfuscation(content); obfuscated {
+		d.issues = append(d.issues, obfIssues...)
+		return true // BLOCK
+	}
+
+	// Check for echo with escape sequences
+	cmd, _ := shellparse.ResolveStaticWord(call.Args[0])
+	if cmd == "echo" || strings.HasSuffix(cmd, "/echo") {
+		for _, arg := range call.Args[1:] {
+			argStr, _ := shellparse.ResolveStaticWord(arg)
+			// Check for hex escapes
+			if strings.Contains(argStr, "\\x") || strings.Contains(argStr, "\\0") {
+				d.issues = append(d.issues, "echo with escape sequences detected (possible obfuscation)")
+				return true // BLOCK
+			}
+			// Check for -e flag with escapes
+			if argStr == "-e" {
+				d.issues = append(d.issues, "echo -e detected which enables escape sequences")
+				return true // BLOCK
+			}
+		}
+	}
+
+	return false
 }
