@@ -1,4 +1,4 @@
-// Package main provides a generic bash command blocker for Claude Code hooks
+// Package main provides a bash command safety validator for Claude Code hooks
 package main
 
 import (
@@ -116,11 +116,11 @@ OPTIONAL FLAGS:
     -help
             Show this help message
 
-SECURITY FEATURES:
-    • Attempts to block ALL forms of the command (variables, escaping, encoding)
-    • Detects common obfuscation (base64, hex, character escaping)
-    • Recursively analyzes nested commands (sh -c, eval, source)
-    • Blocks dynamic content (variable substitution, command substitution)
+SAFETY FEATURES:
+    • Comprehensive detection including variables, escaping, and encoding
+    • Identifies obfuscated commands (base64, hex, character escaping)
+    • Analyzes nested commands (sh -c, eval, source)
+    • Blocks dynamic content that cannot be verified
 
 EXAMPLES:
     # Block git push commands

@@ -18,7 +18,7 @@ type CommandRule struct {
 	Description     string   // Human readable description
 }
 
-// CommandDetector provides comprehensive command detection with maximum security
+// CommandDetector provides command detection for safety validation
 type CommandDetector struct {
 	commandRules []CommandRule
 	issues       []string
@@ -26,7 +26,7 @@ type CommandDetector struct {
 	currentDepth int
 }
 
-// NewCommandDetector creates a new detector with maximum security
+// NewCommandDetector creates a new detector with safety checks
 func NewCommandDetector(rules []CommandRule, maxDepth int) *CommandDetector {
 	if maxDepth <= 0 {
 		maxDepth = 10 // Default safe recursion limit
@@ -61,10 +61,10 @@ func (d *CommandDetector) ShouldBlockCommand(command string) bool {
 
 // analyzeCommandRecursive performs analysis with recursion tracking
 func (d *CommandDetector) analyzeCommandRecursive(shellExpr string) bool {
-	// Prevent DoS via deeply nested commands
+	// Prevent excessive nesting that could cause performance issues
 	d.currentDepth++
 	if d.currentDepth > d.maxDepth {
-		d.addIssue("Max recursion depth exceeded - potential DoS attempt")
+		d.addIssue("Maximum nesting depth exceeded - command too complex")
 		return true // BLOCK
 	}
 	defer func() { d.currentDepth-- }()
@@ -72,8 +72,8 @@ func (d *CommandDetector) analyzeCommandRecursive(shellExpr string) bool {
 	// Parse shell expression into an AST
 	ast, err := shellparse.ParseShellExpression(shellExpr)
 	if err != nil {
-		// FAIL-SECURE: Can't parse = block
-		d.addIssue("Failed to parse shell expression: " + err.Error())
+		// Safety principle: If we can't understand it, don't run it
+		d.addIssue("Unable to parse shell expression: " + err.Error())
 		return true // BLOCK
 	}
 
@@ -129,7 +129,7 @@ func (d *CommandDetector) analyzeCallExpr(call *syntax.CallExpr) bool {
 // checkDynamicCommand checks for dynamic command substitution
 func (d *CommandDetector) checkDynamicCommand(cmdIsStatic bool) bool {
 	if !cmdIsStatic {
-		d.addIssue("Command uses dynamic substitution which could hide malicious intent")
+		d.addIssue("Command uses dynamic substitution - unable to verify safety")
 		return true
 	}
 	return false

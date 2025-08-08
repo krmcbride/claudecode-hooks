@@ -110,7 +110,7 @@ func ResolveStaticWord(word *syntax.Word) (val string, isStatic bool) {
 					// Variable expansion makes it dynamic
 					isStatic = false
 					// For partial resolution, we could try to handle simple cases
-					// but for security, we'll mark it as dynamic
+					// but for safety, we'll mark it as dynamic
 				case *syntax.CmdSubst:
 					// Command substitution makes it dynamic
 					isStatic = false
@@ -204,7 +204,7 @@ func ExtractShellCommands(call *syntax.CallExpr) ([]string, bool) {
 	for i := 1; i < len(call.Args); i++ {
 		arg, argIsStatic := ResolveStaticWord(call.Args[i])
 		if !argIsStatic {
-			// SECURITY: Don't skip dynamic arguments - they could contain malicious content
+			// SAFETY: Don't skip dynamic arguments - they need verification
 			hasDynamicContent = true
 			continue
 		}
@@ -213,7 +213,7 @@ func ExtractShellCommands(call *syntax.CallExpr) ([]string, bool) {
 		if arg == "-c" && i+1 < len(call.Args) {
 			cmdStr, cmdStrIsStatic := ResolveStaticWord(call.Args[i+1])
 			if !cmdStrIsStatic {
-				// SECURITY: Dynamic shell command content is extremely dangerous
+				// SAFETY: Dynamic shell command content cannot be verified
 				hasDynamicContent = true
 			} else if cmdStr != "" {
 				commands = append(commands, cmdStr)
@@ -234,7 +234,7 @@ func isShellInterpreter(cmd string) bool {
 	return slices.Contains(shellCommands, cmd)
 }
 
-// AnalyzeEvalCommand analyzes eval commands for suspicious content
+// AnalyzeEvalCommand analyzes eval commands to extract their content
 func AnalyzeEvalCommand(call *syntax.CallExpr) []string {
 	if len(call.Args) < 2 {
 		return nil
@@ -352,7 +352,7 @@ func containsReversePattern(s string) bool {
 // containsSubstitutionPattern checks for character substitution obfuscation
 func containsSubstitutionPattern(s string) bool {
 	// Look for patterns with excessive variable substitutions
-	// ${} patterns that look suspicious
+	// ${} patterns that may indicate obfuscation
 	if strings.Count(s, "${") > 2 && strings.Contains(s, "}") {
 		return true
 	}
