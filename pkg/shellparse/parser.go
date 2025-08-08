@@ -39,50 +39,6 @@ func ExtractCallExprs(node syntax.Node) []*syntax.CallExpr {
 	return calls
 }
 
-// WordToString converts a syntax.Word to string
-func WordToString(word *syntax.Word) string {
-	if word == nil {
-		return ""
-	}
-	var result strings.Builder
-	for _, part := range word.Parts {
-		switch p := part.(type) {
-		case *syntax.Lit:
-			result.WriteString(p.Value)
-		case *syntax.SglQuoted:
-			result.WriteString(p.Value)
-		case *syntax.DblQuoted:
-			for _, dqPart := range p.Parts {
-				if lit, ok := dqPart.(*syntax.Lit); ok {
-					result.WriteString(lit.Value)
-				}
-			}
-		}
-	}
-	return result.String()
-}
-
-// GetCommandName extracts the command name from a CallExpr
-func GetCommandName(call *syntax.CallExpr) string {
-	if len(call.Args) == 0 {
-		return ""
-	}
-	return WordToString(call.Args[0])
-}
-
-// GetCommandArgs extracts command arguments from a CallExpr
-func GetCommandArgs(call *syntax.CallExpr) []string {
-	if len(call.Args) <= 1 {
-		return nil
-	}
-
-	args := make([]string, 0, len(call.Args)-1)
-	for _, arg := range call.Args[1:] {
-		args = append(args, WordToString(arg))
-	}
-	return args
-}
-
 // ResolveStaticWord attempts to resolve a word into a static string.
 // It returns the resolved string and a boolean indicating if the resolution is complete
 // (i.e., the word contained no dynamic parts like variables or command substitutions).
@@ -141,26 +97,6 @@ func ResolveStaticWord(word *syntax.Word) (val string, isStatic bool) {
 	}
 
 	return sb.String(), isStatic
-}
-
-// IsGitCommand checks if a command name refers to git, handling various forms
-func IsGitCommand(cmd string) bool {
-	// Handle direct git command
-	if cmd == "git" {
-		return true
-	}
-
-	// Handle full paths like /usr/bin/git, /usr/local/bin/git, ./git
-	if strings.HasSuffix(cmd, "/git") {
-		return true
-	}
-
-	// Handle Windows paths (git.exe)
-	if strings.HasSuffix(cmd, "git.exe") || strings.HasSuffix(cmd, "/git.exe") {
-		return true
-	}
-
-	return false
 }
 
 // NormalizeCommandPath normalizes a command path for comparison

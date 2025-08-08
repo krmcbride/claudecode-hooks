@@ -45,21 +45,3 @@ func matchesAllWords(text, pattern string) bool {
 	}
 	return true
 }
-
-// containsAnyPattern checks if text contains any of the command patterns
-func containsAnyPattern(text string, rules []CommandRule) bool {
-	textLower := strings.ToLower(text)
-	for _, rule := range rules {
-		// Check command name
-		if strings.Contains(textLower, strings.ToLower(rule.Command)) {
-			return true
-		}
-		// Check blocked patterns
-		for _, pattern := range rule.BlockedPatterns {
-			if strings.Contains(textLower, strings.ToLower(pattern)) {
-				return true
-			}
-		}
-	}
-	return false
-}
