@@ -3,7 +3,6 @@ package detector
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"mvdan.cc/sh/v3/syntax"
@@ -96,92 +95,6 @@ func resolveStaticWord(word *syntax.Word) (val string, isStatic bool) {
 	}
 
 	return sb.String(), isStatic
-}
-
-// normalizeCommandPath normalizes a command path for comparison
-func normalizeCommandPath(cmd string) string {
-	// Clean the path
-	cleaned := filepath.Clean(cmd)
-
-	// Extract just the command name for comparison
-	base := filepath.Base(cleaned)
-
-	// Remove .exe extension if present (Windows)
-	base = strings.TrimSuffix(base, ".exe")
-
-	return base
-}
-
-// extractShellCommands extracts shell commands from common shell interpreter patterns
-// Returns commands found and a boolean indicating if dynamic content was detected
-func extractShellCommands(call *syntax.CallExpr) ([]string, bool) {
-	if len(call.Args) < 2 {
-		return nil, false
-	}
-
-	cmd, cmdIsStatic := resolveStaticWord(call.Args[0])
-	if !cmdIsStatic {
-		return nil, true // Dynamic command itself
-	}
-
-	// Normalize command name
-	cmdName := normalizeCommandPath(cmd)
-
-	// Check if this is a shell interpreter
-	if !isShellInterpreter(cmdName) {
-		return nil, false
-	}
-
-	var commands []string
-	hasDynamicContent := false
-
-	// Look for -c flag
-	for i := 1; i < len(call.Args); i++ {
-		arg, argIsStatic := resolveStaticWord(call.Args[i])
-		if !argIsStatic {
-			// SAFETY: Don't skip dynamic arguments - they need verification
-			hasDynamicContent = true
-			continue
-		}
-
-		// If we find -c, the next argument should be the command
-		if arg == "-c" && i+1 < len(call.Args) {
-			cmdStr, cmdStrIsStatic := resolveStaticWord(call.Args[i+1])
-			if !cmdStrIsStatic {
-				// SAFETY: Dynamic shell command content cannot be verified
-				hasDynamicContent = true
-			} else if cmdStr != "" {
-				commands = append(commands, cmdStr)
-			}
-			break
-		}
-	}
-
-	return commands, hasDynamicContent
-}
-
-// analyzeEvalCommand analyzes eval commands to extract their content
-func analyzeEvalCommand(call *syntax.CallExpr) []string {
-	if len(call.Args) < 2 {
-		return nil
-	}
-
-	cmd, cmdIsStatic := resolveStaticWord(call.Args[0])
-	if !cmdIsStatic || cmd != "eval" {
-		return nil
-	}
-
-	var evalContent []string
-
-	// Collect all arguments to eval (they get concatenated)
-	for i := 1; i < len(call.Args); i++ {
-		arg, argIsStatic := resolveStaticWord(call.Args[i])
-		if argIsStatic && arg != "" {
-			evalContent = append(evalContent, arg)
-		}
-	}
-
-	return evalContent
 }
 
 // detectObfuscation performs basic obfuscation detection on a string
