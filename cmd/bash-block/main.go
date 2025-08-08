@@ -6,42 +6,42 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/krmcbride/claudecode-hooks/pkg/detector"
 	"github.com/krmcbride/claudecode-hooks/pkg/hook"
-	"github.com/krmcbride/claudecode-hooks/pkg/utils"
 )
 
 const defaultMaxRecursion = 10
 
+// cmdFlag allows multiple -cmd flags to be specified
+type cmdFlag []string
+
+func (c *cmdFlag) String() string {
+	return strings.Join(*c, ", ")
+}
+
+func (c *cmdFlag) Set(value string) error {
+	*c = append(*c, value)
+	return nil
+}
+
 func main() {
 	// Parse command-line flags
-	var (
-		command     = flag.String("cmd", "", "Primary command to monitor (required)")
-		patterns    = flag.String("patterns", "", "Comma-separated blocked patterns (required)")
-		description = flag.String("desc", "", "Description for logging")
-		allowList   = flag.String("allow", "", "Comma-separated exception patterns")
-		maxRecur    = flag.String("max-recursion", strconv.Itoa(defaultMaxRecursion), "Max recursion depth")
-		showHelp    = flag.Bool("help", false, "Show help message")
-	)
+	var commands cmdFlag
+	flag.Var(&commands, "cmd", "Command and optional patterns to block (can be specified multiple times)")
+
+	maxRecur := flag.String("max-recursion", strconv.Itoa(defaultMaxRecursion), "Max recursion depth")
+	showHelp := flag.Bool("help", false, "Show help message")
+
 	flag.Parse()
 
 	// Show help if requested
-	if *showHelp {
+	if *showHelp || len(commands) == 0 {
 		showUsage()
-		os.Exit(0)
-	}
-
-	// Validate required flags
-	if *command == "" {
-		fmt.Fprintf(os.Stderr, "Error: -cmd flag is required\n")
-		showUsage()
-		os.Exit(1)
-	}
-
-	if *patterns == "" {
-		fmt.Fprintf(os.Stderr, "Error: -patterns flag is required\n")
-		showUsage()
+		if *showHelp {
+			os.Exit(0)
+		}
 		os.Exit(1)
 	}
 
@@ -52,16 +52,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Parse patterns and allow list
-	blockedPatterns := utils.ParseCommaSeparated(*patterns)
-	allowedPatterns := utils.ParseCommaSeparated(*allowList)
-
-	// Create command rule
-	rule := detector.CommandRule{
-		BlockedCommand:  *command,
-		BlockedPatterns: blockedPatterns,
-		AllowedPatterns: allowedPatterns,
-		Description:     *description,
+	// Parse command rules from -cmd flags
+	rules := parseCommandRules(commands)
+	if len(rules) == 0 {
+		fmt.Fprintf(os.Stderr, "Error: no valid command rules specified\n")
+		os.Exit(1)
 	}
 
 	// Read PreToolUse hook input
@@ -72,13 +67,13 @@ func main() {
 		return
 	}
 
-	// Create detector with configuration (always uses maximum security)
-	commandDetector := detector.NewCommandDetector([]detector.CommandRule{rule}, maxRecursion)
+	// Create detector with configuration
+	commandDetector := detector.NewCommandDetector(rules, maxRecursion)
 
-	// Check if command should be blocked
-	if commandDetector.ShouldBlockCommand(input.ToolInput.Command) {
+	// Check if expression should be blocked
+	if commandDetector.ShouldBlockShellExpr(input.ToolInput.Command) {
 		issues := commandDetector.GetIssues()
-		hook.BlockPreToolUse(fmt.Sprintf("Blocked %s command detected!", *command), issues)
+		hook.BlockPreToolUse("Blocked command detected!", issues)
 		return
 	}
 
@@ -86,51 +81,88 @@ func main() {
 	hook.AllowPreToolUse()
 }
 
+// parseCommandRules parses -cmd flag values into CommandRule structs
+func parseCommandRules(commands []string) []detector.CommandRule {
+	var rules []detector.CommandRule
+
+	for _, cmd := range commands {
+		parts := strings.Fields(cmd)
+		if len(parts) == 0 {
+			continue
+		}
+
+		// First part is the command to block
+		blockedCommand := parts[0]
+
+		// Remaining parts are patterns to block (if any)
+		// If no patterns specified, block ALL uses of the command
+		var blockedPatterns []string
+		if len(parts) > 1 {
+			blockedPatterns = parts[1:]
+		} else {
+			// Block all subcommands by using a wildcard pattern
+			// Empty patterns means "check command only, not subcommands"
+			// So we use "*" to indicate "block any subcommand"
+			blockedPatterns = []string{"*"}
+		}
+
+		rule := detector.CommandRule{
+			BlockedCommand:  blockedCommand,
+			BlockedPatterns: blockedPatterns,
+		}
+
+		rules = append(rules, rule)
+	}
+
+	return rules
+}
+
 // showUsage displays usage information
 func showUsage() {
-	fmt.Fprintf(os.Stderr, `bash-block: Maximum security bash command blocker for Claude Code hooks
+	fmt.Fprintf(os.Stderr, `bash-block: Bash command blocker for Claude Code hooks
 
-Provides an additional layer of security on top of Claude Code's built-in deny permissions.
-Attempts to block commands in ALL forms including: variables, subshells, eval, obfuscation, etc.
+Provides an additional layer of safety on top of Claude Code's built-in deny permissions.
+Blocks commands including through variables, subshells, eval, obfuscation, etc.
 
 USAGE:
-    bash-block -cmd=COMMAND -patterns=PATTERNS [OPTIONS]
+    bash-block -cmd COMMAND_SPEC [-cmd COMMAND_SPEC ...] [OPTIONS]
 
-REQUIRED FLAGS:
+REQUIRED:
     -cmd string
-            Primary command to monitor (e.g., "git", "aws", "kubectl")
-    
-    -patterns string
-            Comma-separated list of blocked patterns (e.g., "push", "delete-bucket,terminate-instances")
+            Command and optional patterns to block (can be specified multiple times)
+            Format: "command [pattern1] [pattern2] ..."
+            
+            Examples:
+              -cmd git                    Block all git commands
+              -cmd "git push"             Block only git push
+              -cmd "git push pull"        Block git push and git pull
+              -cmd "aws delete-*"         Block aws delete-* commands
+              -cmd kubectl                Block all kubectl commands
 
-OPTIONAL FLAGS:
-    -desc string
-            Human-readable description for logging
-    
-    -allow string
-            Comma-separated list of exception patterns to allow despite blocks
-    
-    -max-recursion string
+OPTIONAL:
+    -max-recursion int
             Maximum recursion depth for command analysis (default: %d)
     
     -help
             Show this help message
 
-SAFETY FEATURES:
-    • Comprehensive detection including variables, escaping, and encoding
-    • Identifies obfuscated commands (base64, hex, character escaping)
-    • Analyzes nested commands (sh -c, eval, source)
-    • Blocks dynamic content that cannot be verified
-
 EXAMPLES:
-    # Block git push commands
-    bash-block -cmd=git -patterns=push -desc="Block git push"
+    # Block all git commands
+    bash-block -cmd git
     
-    # Block dangerous AWS operations
-    bash-block -cmd=aws -patterns="delete-bucket,terminate-instances"
+    # Block only git push
+    bash-block -cmd "git push"
     
-    # Block kubectl delete with exceptions for pods
-    bash-block -cmd=kubectl -patterns="delete" -allow="delete pod"
+    # Block multiple specific commands
+    bash-block -cmd "git push" -cmd "aws delete-bucket terminate-instances"
+    
+    # Block all aws and kubectl commands
+    bash-block -cmd aws -cmd kubectl
+    
+    # Complex example with multiple rules
+    bash-block -cmd "git push force-push" \
+               -cmd "aws delete-* terminate-*" \
+               -cmd "kubectl delete"
 
 CLAUDE CODE CONFIGURATION:
 Add to your Claude Code settings.json:
@@ -140,11 +172,7 @@ Add to your Claude Code settings.json:
     "preToolUse": [
       {
         "command": "/path/to/bash-block",
-        "args": ["-cmd=git", "-patterns=push", "-desc=Block git push"]
-      },
-      {
-        "command": "/path/to/bash-block",
-        "args": ["-cmd=aws", "-patterns=delete-bucket,terminate-instances"]
+        "args": ["-cmd", "git push", "-cmd", "aws delete-*"]
       }
     ]
   }

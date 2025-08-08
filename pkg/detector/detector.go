@@ -12,8 +12,6 @@ import (
 type CommandRule struct {
 	BlockedCommand  string   // Primary command to block (git, aws, kubectl)
 	BlockedPatterns []string // Subcommand patterns to block
-	AllowedPatterns []string // Patterns to allow despite blocks
-	Description     string   // Human readable description
 }
 
 // CommandDetector provides command detection for safety validation
@@ -48,17 +46,17 @@ func (d *CommandDetector) GetIssues() []string {
 	return result
 }
 
-// ShouldBlockCommand determines if a command should be blocked.
+// ShouldBlockShellExpr determines if a command should be blocked.
 // Returns true if command should be BLOCKED, false if allowed.
-func (d *CommandDetector) ShouldBlockCommand(command string) bool {
+func (d *CommandDetector) ShouldBlockShellExpr(shellExpr string) bool {
 	// Reset state for new analysis
 	d.currentDepth = 0
 	d.issues = d.issues[:0]
-	return d.analyzeCommandRecursive(command)
+	return d.analyzeShellExprRecursive(shellExpr)
 }
 
-// analyzeCommandRecursive performs analysis with recursion tracking
-func (d *CommandDetector) analyzeCommandRecursive(shellExpr string) bool {
+// analyzeShellExprRecursive performs analysis with recursion tracking
+func (d *CommandDetector) analyzeShellExprRecursive(shellExpr string) bool {
 	// Prevent excessive nesting that could cause performance issues
 	d.currentDepth++
 	if d.currentDepth > d.maxDepth {
@@ -79,11 +77,18 @@ func (d *CommandDetector) analyzeCommandRecursive(shellExpr string) bool {
 	calls := extractCallExprs(ast)
 
 	// Check if any command call should be blocked
-	return slices.ContainsFunc(calls, d.analyzeCallExpr)
+	return slices.ContainsFunc(calls, d.shouldBlockCallExpr)
 }
 
-// analyzeCallExpr analyzes a single call expression for threats
-func (d *CommandDetector) analyzeCallExpr(call *syntax.CallExpr) bool {
+// shouldBlockCallExpr evaluates whether a shell call expression should be blocked.
+// This is the core detection logic that checks for:
+// - Commands matching configured blocking rules
+// - Dynamic command substitution attempts
+// - Shell interpreters and eval commands
+// - Command execution patterns (xargs, find -exec, etc.)
+// - Obfuscation attempts (encoding, escaping, etc.)
+// Returns true if the command should be blocked, false if allowed.
+func (d *CommandDetector) shouldBlockCallExpr(call *syntax.CallExpr) bool {
 	if len(call.Args) == 0 {
 		return false // ALLOW: Empty call
 	}
@@ -101,18 +106,14 @@ func (d *CommandDetector) analyzeCallExpr(call *syntax.CallExpr) bool {
 		return true // BLOCK
 	}
 
-	// Check shell interpreters
-	if d.checkShellInterpreter(call, cmd) {
+	// Check if any arguments are themselves blocked commands
+	// This handles cases like: xargs git push, find . -exec git push
+	if d.checkArgumentsForBlockedCommands(call) {
 		return true // BLOCK
 	}
 
-	// Check eval commands
-	if d.checkEvalCommand(call, cmd) {
-		return true // BLOCK
-	}
-
-	// Check execution patterns
-	if d.checkExecutionPatterns(call, cmd) {
+	// Analyze all string literals in the command for nested commands
+	if d.analyzeStringLiterals(call) {
 		return true // BLOCK
 	}
 
@@ -133,44 +134,166 @@ func (d *CommandDetector) checkDynamicCommand(cmdIsStatic bool) bool {
 	return false
 }
 
-// checkShellInterpreter checks for shell interpreter commands
-func (d *CommandDetector) checkShellInterpreter(call *syntax.CallExpr, cmd string) bool {
-	if !isShellInterpreter(cmd) {
-		return false
-	}
+// checkArgumentsForBlockedCommands checks if any arguments are themselves blocked commands
+// This handles cases like: xargs git push, find . -exec git push
+func (d *CommandDetector) checkArgumentsForBlockedCommands(call *syntax.CallExpr) bool {
+	// Skip the first argument (the command itself) and check the rest
+	for i := 1; i < len(call.Args); i++ {
+		arg := call.Args[i]
 
-	d.addIssue("Shell interpreter detected: " + cmd)
+		// Resolve the argument to a static string
+		argStr, isStatic := resolveStaticWord(arg)
+		if !isStatic || argStr == "" {
+			continue
+		}
 
-	// Recursively analyze wrapped commands
-	if commands, _ := extractShellCommands(call); len(commands) > 0 {
-		for _, shellCmd := range commands {
-			if d.analyzeCommandRecursive(shellCmd) {
-				d.addIssue("Blocked command in shell: " + shellCmd)
-				return true // BLOCK
+		// Check if this argument matches any blocked command
+		for _, rule := range d.commandRules {
+			if isMatchingCommand(argStr, rule.BlockedCommand) {
+				// Found a blocked command as an argument
+				// Now check if the next arguments match any blocked patterns
+				remainingArgs := call.Args[i+1:]
+				if d.checkPatternInArgs(remainingArgs, rule) {
+					d.addIssue("Blocked command '" + rule.BlockedCommand + "' found as argument")
+					return true // BLOCK
+				}
 			}
 		}
 	}
-	return true // BLOCK shell interpreters
+	return false
 }
 
-// checkEvalCommand checks for eval/source commands
-func (d *CommandDetector) checkEvalCommand(call *syntax.CallExpr, cmd string) bool {
-	if !isEvalCommand(cmd) {
+// checkPatternInArgs checks if remaining arguments match a blocked pattern
+func (d *CommandDetector) checkPatternInArgs(args []*syntax.Word, rule CommandRule) bool {
+	// If no patterns specified, allow the command
+	if len(rule.BlockedPatterns) == 0 {
 		return false
 	}
 
-	d.addIssue("Eval/source command detected: " + cmd)
+	// Check for wildcard pattern
+	for _, pattern := range rule.BlockedPatterns {
+		if pattern == "*" {
+			return true // Wildcard blocks all
+		}
+	}
 
-	// Recursively analyze eval content
-	if evalContent := analyzeEvalCommand(call); len(evalContent) > 0 {
-		for _, content := range evalContent {
-			if d.analyzeCommandRecursive(content) {
-				d.addIssue("Blocked command in eval: " + content)
-				return true // BLOCK
+	// Collect arguments as strings
+	var argStrings []string
+	for _, arg := range args {
+		argStr, isStatic := resolveStaticWord(arg)
+		if isStatic && argStr != "" && !strings.HasPrefix(argStr, "-") {
+			argStrings = append(argStrings, argStr)
+		}
+	}
+
+	fullArgs := strings.Join(argStrings, " ")
+	return hasBlockedPattern(fullArgs, rule.BlockedPatterns)
+}
+
+// analyzeStringLiterals analyzes all string literals in the command as potential shell expressions
+func (d *CommandDetector) analyzeStringLiterals(call *syntax.CallExpr) bool {
+	// First check what command we're dealing with
+	cmd, _ := resolveStaticWord(call.Args[0])
+	normalizedCmd := normalizeCommand(cmd)
+
+	// For certain commands, we should analyze their string arguments
+	// These are commands that typically execute strings as shell code
+	shouldAnalyzeStrings := false
+	switch normalizedCmd {
+	case "sh", "bash", "zsh", "ksh", "dash", "fish":
+		// Shell interpreters with -c flag
+		shouldAnalyzeStrings = true
+	case "eval", "source", ".":
+		// Commands that evaluate strings as shell code
+		shouldAnalyzeStrings = true
+	case "echo", "printf":
+		// These commands output text - only analyze if piped to shell
+		// We'll analyze their strings but with more conservative filtering
+		shouldAnalyzeStrings = true
+	}
+
+	if !shouldAnalyzeStrings {
+		return false
+	}
+
+	// Skip the first argument (the command itself) and analyze the rest
+	for i := 1; i < len(call.Args); i++ {
+		arg := call.Args[i]
+
+		// Extract all string literals from this argument
+		if strings := extractStringLiterals(arg); len(strings) > 0 {
+			for _, str := range strings {
+				// For echo/printf, be more conservative - only check if it really looks like a command
+				if normalizedCmd == "echo" || normalizedCmd == "printf" {
+					if !d.definitelyLooksLikeCommand(str) {
+						continue
+					}
+				} else {
+					// For shell interpreters and eval, check more broadly
+					if !d.looksLikeCommand(str) {
+						continue
+					}
+				}
+
+				// Try to parse and analyze each string as a shell expression
+				if d.analyzeShellExprRecursive(str) {
+					d.addIssue("Blocked command found in string: " + str)
+					return true // BLOCK
+				}
 			}
 		}
 	}
-	return true // BLOCK eval commands
+	return false
+}
+
+// looksLikeCommand checks if a string looks like it might contain a command
+// rather than just being a flag or simple argument
+func (d *CommandDetector) looksLikeCommand(str string) bool {
+	// Skip if it's just a flag (starts with -)
+	if strings.HasPrefix(str, "-") {
+		return false
+	}
+
+	// Skip if it's a single word without spaces (likely just an argument)
+	if !strings.Contains(str, " ") && !strings.Contains(str, ";") &&
+		!strings.Contains(str, "|") && !strings.Contains(str, "&") {
+		return false
+	}
+
+	// Additional check: if the string starts with a known blocked command, it's likely a command
+	// This helps with cases like "git push origin" in various contexts
+	for _, rule := range d.commandRules {
+		if strings.HasPrefix(str, rule.BlockedCommand+" ") {
+			return true
+		}
+	}
+
+	return true
+}
+
+// definitelyLooksLikeCommand is a stricter version used for echo/printf strings
+// It only returns true if the string definitely looks like executable commands
+func (d *CommandDetector) definitelyLooksLikeCommand(str string) bool {
+	// Must start with a known blocked command to be considered
+	startsWithCommand := false
+	for _, rule := range d.commandRules {
+		if strings.HasPrefix(str, rule.BlockedCommand+" ") {
+			startsWithCommand = true
+			break
+		}
+	}
+
+	if !startsWithCommand {
+		// Check for shell metacharacters that indicate command execution
+		if strings.Contains(str, ";") || strings.Contains(str, "&&") ||
+			strings.Contains(str, "||") || strings.Contains(str, "|") {
+			// Could be a command chain
+			return true
+		}
+		return false
+	}
+
+	return true
 }
 
 // checkDirectCommand checks for direct command matches with configured rules
@@ -190,28 +313,33 @@ func (d *CommandDetector) checkRuleMatch(call *syntax.CallExpr, cmd string, rule
 		return false
 	}
 
-	// Need arguments for pattern matching
-	if len(call.Args) < 2 {
-		return false
-	}
-
-	// Extract and validate arguments
-	args, hasDynamic := d.extractArguments(call.Args[1:], rule.BlockedCommand)
-	if hasDynamic {
-		return true // BLOCK: Dynamic subcommand
-	}
-
-	fullArgs := strings.Join(args, " ")
-
-	// Check allowed patterns first
-	if hasAllowedException(fullArgs, rule.AllowedPatterns) {
-		return false // ALLOW
+	// Extract arguments if any exist
+	var fullArgs string
+	if len(call.Args) > 1 {
+		// Extract and validate arguments
+		args, hasDynamic := d.extractArguments(call.Args[1:], rule.BlockedCommand)
+		if hasDynamic {
+			return true // BLOCK: Dynamic subcommand
+		}
+		fullArgs = strings.Join(args, " ")
 	}
 
 	// Check blocked patterns
-	if hasBlockedPattern(fullArgs, rule.BlockedPatterns) {
-		d.addIssue("Blocked " + rule.BlockedCommand + " pattern detected")
-		return true // BLOCK
+	// If no arguments and pattern is "*", block the command
+	// If no arguments and specific patterns, don't block (command alone is OK)
+	// If arguments exist, check against patterns
+	if len(rule.BlockedPatterns) > 0 {
+		if hasBlockedPattern(fullArgs, rule.BlockedPatterns) {
+			d.addIssue("Blocked " + rule.BlockedCommand + " pattern detected")
+			return true // BLOCK
+		}
+		// Special case: wildcard pattern blocks even commands with no args
+		for _, pattern := range rule.BlockedPatterns {
+			if pattern == "*" {
+				d.addIssue("Blocked " + rule.BlockedCommand + " command")
+				return true // BLOCK
+			}
+		}
 	}
 
 	return false
@@ -232,91 +360,6 @@ func (d *CommandDetector) extractArguments(args []*syntax.Word, command string) 
 		result = append(result, argVal)
 	}
 	return result, false
-}
-
-// checkExecutionPatterns checks for command execution patterns
-func (d *CommandDetector) checkExecutionPatterns(call *syntax.CallExpr, cmd string) bool {
-	// Check xargs
-	if d.checkXargsCommand(call, cmd) {
-		return true
-	}
-
-	// Check find -exec
-	if d.checkFindExecCommand(call, cmd) {
-		return true
-	}
-
-	// Check GNU parallel
-	if d.checkParallelCommand(cmd) {
-		return true
-	}
-
-	return false
-}
-
-// checkXargsCommand checks for xargs usage
-func (d *CommandDetector) checkXargsCommand(call *syntax.CallExpr, cmd string) bool {
-	if !isXargsCommand(cmd) {
-		return false
-	}
-
-	d.addIssue("xargs command detected which can execute piped commands")
-
-	// Check for blocked commands in xargs arguments
-	for _, arg := range call.Args[1:] {
-		argStr, _ := resolveStaticWord(arg)
-		for _, rule := range d.commandRules {
-			if isMatchingCommand(argStr, rule.BlockedCommand) {
-				d.addIssue("Blocked command passed to xargs: " + argStr)
-				return true // BLOCK
-			}
-		}
-	}
-	return true // BLOCK xargs itself
-}
-
-// checkFindExecCommand checks for find with -exec
-func (d *CommandDetector) checkFindExecCommand(call *syntax.CallExpr, cmd string) bool {
-	if !isFindCommand(cmd) {
-		return false
-	}
-
-	// Look for -exec flags
-	execIndex := -1
-	for i, arg := range call.Args[1:] {
-		argStr, _ := resolveStaticWord(arg)
-		if argStr == "-exec" || argStr == "-execdir" || argStr == "-ok" {
-			execIndex = i
-			d.addIssue("find with -exec detected which can execute commands")
-			break
-		}
-	}
-
-	if execIndex < 0 {
-		return false // No -exec flag
-	}
-
-	// Check for blocked commands after -exec
-	if execIndex+2 < len(call.Args) {
-		nextArg, _ := resolveStaticWord(call.Args[execIndex+2])
-		for _, rule := range d.commandRules {
-			if isMatchingCommand(nextArg, rule.BlockedCommand) {
-				d.addIssue("Blocked command in find -exec: " + nextArg)
-				return true // BLOCK
-			}
-		}
-	}
-
-	return true // BLOCK find -exec
-}
-
-// checkParallelCommand checks for GNU parallel
-func (d *CommandDetector) checkParallelCommand(cmd string) bool {
-	if isParallelCommand(cmd) {
-		d.addIssue("GNU parallel detected which can execute multiple commands")
-		return true
-	}
-	return false
 }
 
 // checkObfuscation checks for obfuscated commands
