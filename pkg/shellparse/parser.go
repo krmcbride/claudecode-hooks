@@ -10,23 +10,33 @@ import (
 	"mvdan.cc/sh/v3/syntax"
 )
 
-// ParseCommand parses a shell command and extracts command calls
-func ParseCommand(command string) ([]*syntax.CallExpr, error) {
+// ParseShellExpression parses a shell expression into an Abstract Syntax Tree.
+// The input shellExpr can be a simple command ("ls -la") or a complex expression
+// with pipes, conditionals, loops, and subshells ("cd /tmp && git pull || echo failed").
+// Returns the AST root node which can be traversed to extract various elements
+// like command calls, redirections, variables, etc.
+func ParseShellExpression(shellExpr string) (syntax.Node, error) {
 	parser := syntax.NewParser()
-	node, err := parser.Parse(strings.NewReader(command), "")
+	node, err := parser.Parse(strings.NewReader(shellExpr), "")
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse command: %w", err)
+		return nil, fmt.Errorf("failed to parse shell expression: %w", err)
 	}
+	return node, nil
+}
 
+// ExtractCallExprs walks the AST and collects all command call expressions.
+// These represent actual command invocations (e.g., "git push", "echo hello").
+// The traversal is depth-first, capturing commands in nested structures like
+// subshells, conditionals, and loops.
+func ExtractCallExprs(node syntax.Node) []*syntax.CallExpr {
 	var calls []*syntax.CallExpr
-	syntax.Walk(node, func(node syntax.Node) bool {
-		if call, ok := node.(*syntax.CallExpr); ok {
+	syntax.Walk(node, func(n syntax.Node) bool {
+		if call, ok := n.(*syntax.CallExpr); ok {
 			calls = append(calls, call)
 		}
-		return true
+		return true // Continue traversing into child nodes
 	})
-
-	return calls, nil
+	return calls
 }
 
 // WordToString converts a syntax.Word to string

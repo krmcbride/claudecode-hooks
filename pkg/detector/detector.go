@@ -60,7 +60,7 @@ func (d *CommandDetector) ShouldBlockCommand(command string) bool {
 }
 
 // analyzeCommandRecursive performs analysis with recursion tracking
-func (d *CommandDetector) analyzeCommandRecursive(command string) bool {
+func (d *CommandDetector) analyzeCommandRecursive(shellExpr string) bool {
 	// Prevent DoS via deeply nested commands
 	d.currentDepth++
 	if d.currentDepth > d.maxDepth {
@@ -69,15 +69,18 @@ func (d *CommandDetector) analyzeCommandRecursive(command string) bool {
 	}
 	defer func() { d.currentDepth-- }()
 
-	// Parse command into structured call expressions
-	calls, err := shellparse.ParseCommand(command)
+	// Parse shell expression into an AST
+	ast, err := shellparse.ParseShellExpression(shellExpr)
 	if err != nil {
 		// FAIL-SECURE: Can't parse = block
-		d.addIssue("Failed to parse command: " + err.Error())
+		d.addIssue("Failed to parse shell expression: " + err.Error())
 		return true // BLOCK
 	}
 
-	// Check if any call should be blocked
+	// Extract command calls from the AST
+	calls := shellparse.ExtractCallExprs(ast)
+
+	// Check if any command call should be blocked
 	return slices.ContainsFunc(calls, d.analyzeCallExpr)
 }
 
