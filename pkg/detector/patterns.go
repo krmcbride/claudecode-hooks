@@ -3,15 +3,15 @@ package detector
 
 import "strings"
 
-// hasAllowException checks if text matches any allow exception patterns
-func hasAllowException(text string, exceptions []string) bool {
-	if len(exceptions) == 0 {
+// hasAllowedException checks if text matches any allowed patterns
+func hasAllowedException(text string, allowedPatterns []string) bool {
+	if len(allowedPatterns) == 0 {
 		return false
 	}
 
 	textLower := strings.ToLower(text)
-	for _, exception := range exceptions {
-		if matchesAllWords(textLower, exception) {
+	for _, pattern := range allowedPatterns {
+		if matchesAllWords(textLower, pattern) {
 			return true
 		}
 	}
