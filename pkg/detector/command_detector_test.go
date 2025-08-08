@@ -66,10 +66,10 @@ func TestCommandDetector_BasicGitPush(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			detector := NewCommandDetector(rules, 10)
-			gotBlock := detector.ShouldBlockCommand(tt.command)
+			gotBlock := detector.ShouldBlockShellExpr(tt.command)
 
 			if gotBlock != tt.wantBlock {
-				t.Errorf("ShouldBlockCommand() = %v, want %v. Issues: %v", gotBlock, tt.wantBlock, detector.GetIssues())
+				t.Errorf("ShouldBlockShellExpr() = %v, want %v. Issues: %v", gotBlock, tt.wantBlock, detector.GetIssues())
 			}
 		})
 	}
@@ -136,10 +136,10 @@ func TestCommandDetector_MultipleRules(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			detector := NewCommandDetector(rules, 10)
-			gotBlock := detector.ShouldBlockCommand(tt.command)
+			gotBlock := detector.ShouldBlockShellExpr(tt.command)
 
 			if gotBlock != tt.wantBlock {
-				t.Errorf("ShouldBlockCommand() = %v, want %v. Issues: %v", gotBlock, tt.wantBlock, detector.GetIssues())
+				t.Errorf("ShouldBlockShellExpr() = %v, want %v. Issues: %v", gotBlock, tt.wantBlock, detector.GetIssues())
 			}
 		})
 	}
@@ -188,10 +188,10 @@ func TestCommandDetector_CommandMatching(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			detector := NewCommandDetector(rules, 10)
-			gotBlock := detector.ShouldBlockCommand(tt.command)
+			gotBlock := detector.ShouldBlockShellExpr(tt.command)
 
 			if gotBlock != tt.wantBlock {
-				t.Errorf("ShouldBlockCommand() = %v, want %v. Issues: %v", gotBlock, tt.wantBlock, detector.GetIssues())
+				t.Errorf("ShouldBlockShellExpr() = %v, want %v. Issues: %v", gotBlock, tt.wantBlock, detector.GetIssues())
 			}
 		})
 	}
@@ -221,10 +221,10 @@ func TestCommandDetector_IssueReporting(t *testing.T) {
 	detector := NewCommandDetector(rules, 10)
 
 	// Test that issues are cleared between analyses
-	detector.ShouldBlockCommand("git push")
+	detector.ShouldBlockShellExpr("git push")
 	firstIssues := len(detector.GetIssues())
 
-	detector.ShouldBlockCommand("git pull") // Should not add issues
+	detector.ShouldBlockShellExpr("git pull") // Should not add issues
 	secondIssues := len(detector.GetIssues())
 
 	if secondIssues != 0 {
@@ -308,10 +308,10 @@ func TestCommandDetector_InterspersedFlags(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			detector := NewCommandDetector(rules, 10)
-			gotBlock := detector.ShouldBlockCommand(tt.command)
+			gotBlock := detector.ShouldBlockShellExpr(tt.command)
 
 			if gotBlock != tt.wantBlock {
-				t.Errorf("ShouldBlockCommand() = %v, want %v. Command: %s, Issues: %v", gotBlock, tt.wantBlock, tt.command, detector.GetIssues())
+				t.Errorf("ShouldBlockShellExpr() = %v, want %v. Command: %s, Issues: %v", gotBlock, tt.wantBlock, tt.command, detector.GetIssues())
 			}
 		})
 	}

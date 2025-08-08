@@ -149,10 +149,10 @@ func TestCommandDetector_WildcardPatterns(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			detector := NewCommandDetector(tt.rules, 10)
-			gotBlock := detector.ShouldBlockCommand(tt.command)
+			gotBlock := detector.ShouldBlockShellExpr(tt.command)
 
 			if gotBlock != tt.wantBlock {
-				t.Errorf("ShouldBlockCommand() = %v, want %v. Command: %s, Issues: %v",
+				t.Errorf("ShouldBlockShellExpr() = %v, want %v. Command: %s, Issues: %v",
 					gotBlock, tt.wantBlock, tt.command, detector.GetIssues())
 			}
 		})

@@ -70,8 +70,8 @@ func main() {
 	// Create detector with configuration
 	commandDetector := detector.NewCommandDetector(rules, maxRecursion)
 
-	// Check if command should be blocked
-	if commandDetector.ShouldBlockCommand(input.ToolInput.Command) {
+	// Check if expression should be blocked
+	if commandDetector.ShouldBlockShellExpr(input.ToolInput.Command) {
 		issues := commandDetector.GetIssues()
 		hook.BlockPreToolUse("Blocked command detected!", issues)
 		return

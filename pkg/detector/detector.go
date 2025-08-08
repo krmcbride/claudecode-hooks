@@ -46,17 +46,17 @@ func (d *CommandDetector) GetIssues() []string {
 	return result
 }
 
-// ShouldBlockCommand determines if a command should be blocked.
+// ShouldBlockShellExpr determines if a command should be blocked.
 // Returns true if command should be BLOCKED, false if allowed.
-func (d *CommandDetector) ShouldBlockCommand(command string) bool {
+func (d *CommandDetector) ShouldBlockShellExpr(shellExpr string) bool {
 	// Reset state for new analysis
 	d.currentDepth = 0
 	d.issues = d.issues[:0]
-	return d.analyzeCommandRecursive(command)
+	return d.analyzeShellExprRecursive(shellExpr)
 }
 
-// analyzeCommandRecursive performs analysis with recursion tracking
-func (d *CommandDetector) analyzeCommandRecursive(shellExpr string) bool {
+// analyzeShellExprRecursive performs analysis with recursion tracking
+func (d *CommandDetector) analyzeShellExprRecursive(shellExpr string) bool {
 	// Prevent excessive nesting that could cause performance issues
 	d.currentDepth++
 	if d.currentDepth > d.maxDepth {
@@ -142,7 +142,7 @@ func (d *CommandDetector) checkShellInterpreter(call *syntax.CallExpr, cmd strin
 	// Recursively analyze wrapped commands
 	if commands, _ := extractShellCommands(call); len(commands) > 0 {
 		for _, shellCmd := range commands {
-			if d.analyzeCommandRecursive(shellCmd) {
+			if d.analyzeShellExprRecursive(shellCmd) {
 				d.addIssue("Blocked command in shell: " + shellCmd)
 				return true // BLOCK
 			}
@@ -162,7 +162,7 @@ func (d *CommandDetector) checkEvalCommand(call *syntax.CallExpr, cmd string) bo
 	// Recursively analyze eval content
 	if evalContent := analyzeEvalCommand(call); len(evalContent) > 0 {
 		for _, content := range evalContent {
-			if d.analyzeCommandRecursive(content) {
+			if d.analyzeShellExprRecursive(content) {
 				d.addIssue("Blocked command in eval: " + content)
 				return true // BLOCK
 			}
