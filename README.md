@@ -9,7 +9,7 @@ Security and automation hooks for [Claude Code](https://claude.ai/code) that pre
 - **Maximum Security**: Provides additional defense-in-depth on top of Claude Code's built-in permissions
 - **Advanced Detection**: Detects obfuscated commands, shell escaping, and complex execution patterns
 - **Always Paranoid**: Uses maximum security checks to prevent any bypass attempts
-- **Flexible Rules**: Support for blocked patterns and allow exceptions
+- **Flexible Rules**: Support for multiple commands with pattern matching and wildcards
 
 ### 🎨 file-format: Automatic Code Formatting
 
@@ -51,7 +51,7 @@ Add hooks to your Claude Code settings.json:
         "hooks": [
           {
             "type": "command",
-            "command": "/path/to/krmcbride-bash-block -cmd=git -patterns=push -desc=\"Block git push\""
+            "command": "/path/to/krmcbride-bash-block -cmd='git push'"
           }
         ]
       }
@@ -80,19 +80,21 @@ Block dangerous shell commands with sophisticated detection capabilities.
 **Usage:**
 
 ```bash
-bash-block -cmd=COMMAND -patterns=PATTERNS [OPTIONS]
+bash-block -cmd COMMAND_SPEC [-cmd COMMAND_SPEC ...] [OPTIONS]
 ```
 
 **Required Flags:**
 
-- `-cmd` - Primary command to monitor (e.g., "git", "aws", "kubectl")
-- `-patterns` - Comma-separated blocked patterns (e.g., "push", "delete-bucket")
+- `-cmd` - Command and optional patterns to block (can be specified multiple times)
+  - Format: `"command [pattern1] [pattern2] ..."`
+  - Just the command blocks all subcommands
+  - With patterns, blocks only matching subcommands
+  - Supports wildcards: `*` blocks all, `delete-*` blocks prefixes
 
 **Optional Flags:**
 
-- `-allow` - Comma-separated exception patterns
-- `-desc` - Human-readable description for logging
 - `-max-recursion` - Maximum analysis depth (default: 10)
+- `-help` - Show help message
 
 **Security Features:**
 
@@ -105,14 +107,20 @@ bash-block -cmd=COMMAND -patterns=PATTERNS [OPTIONS]
 **Examples:**
 
 ```bash
-# Block git push (maximum security always enabled)
-bash-block -cmd=git -patterns=push
+# Block all git commands
+bash-block -cmd git
 
-# Block dangerous AWS operations
-bash-block -cmd=aws -patterns="delete-bucket,terminate-instances"
+# Block only git push
+bash-block -cmd "git push"
 
-# Block kubectl delete with exceptions
-bash-block -cmd=kubectl -patterns=delete -allow="delete pod"
+# Block multiple git subcommands
+bash-block -cmd "git push pull force-push"
+
+# Block dangerous AWS operations with wildcards
+bash-block -cmd "aws delete-* terminate-*"
+
+# Multiple command rules
+bash-block -cmd "git push" -cmd "aws delete-*" -cmd kubectl
 ```
 
 ### file-format
@@ -171,11 +179,11 @@ Configure multiple instances of the same hook with different settings:
         "hooks": [
           {
             "type": "command",
-            "command": "/path/to/bash-block -cmd=git -patterns=push -desc=\"Block git push\""
+            "command": "/path/to/bash-block -cmd='git push'"
           },
           {
             "type": "command",
-            "command": "/path/to/bash-block -cmd=git -patterns=\"reset --hard\" -desc=\"Block git reset --hard\""
+            "command": "/path/to/bash-block -cmd='git reset' -cmd='git force-push'"
           }
         ]
       }
@@ -230,9 +238,9 @@ cmd/
 └── file-format/    # File formatter
 
 pkg/
-├── detector/       # Command detection engine
+├── detector/       # Command detection engine with shell parsing
 ├── hook/          # Claude Code hook utilities
-└── shellparse/    # Shell command parsing
+└── utils/         # Shared utility functions
 ```
 
 ## Contributing

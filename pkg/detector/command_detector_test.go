@@ -183,6 +183,21 @@ func TestCommandDetector_CommandMatching(t *testing.T) {
 			command:   "\"C:\\Program Files\\Git\\bin\\git.exe\" push",
 			wantBlock: true,
 		},
+		{
+			name:      "Nix profile path git command",
+			command:   "~/.nix-profile/bin/git push",
+			wantBlock: true,
+		},
+		{
+			name:      "Custom installation path git command",
+			command:   "/opt/custom/tools/git push origin main",
+			wantBlock: true,
+		},
+		{
+			name:      "Homebrew path git command",
+			command:   "/opt/homebrew/bin/git push",
+			wantBlock: true,
+		},
 	}
 
 	for _, tt := range tests {

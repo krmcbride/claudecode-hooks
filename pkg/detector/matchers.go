@@ -2,27 +2,20 @@
 package detector
 
 import (
-	"slices"
+	"path"
 	"strings"
 )
 
-// Shell interpreter names
-var shellInterpreters = []string{"sh", "bash", "zsh", "ksh", "fish", "dash", "ash", "csh", "tcsh"}
-
-// Eval-like commands that execute code
-var evalCommands = []string{"eval", "source", "."}
-
-// normalizeCommand removes common prefixes and suffixes from command paths
+// normalizeCommand extracts the base command name from a path
 func normalizeCommand(cmd string) string {
-	// Remove common path prefixes
-	normalized := strings.TrimPrefix(cmd, "/usr/bin/")
-	normalized = strings.TrimPrefix(normalized, "/bin/")
-	normalized = strings.TrimPrefix(normalized, "/usr/local/bin/")
+	// Extract just the base name from the path
+	// This handles any path like /usr/bin/git, ./git, ~/.nix-profile/bin/aws, etc.
+	base := path.Base(cmd)
 
 	// Remove .exe suffix for Windows
-	normalized = strings.TrimSuffix(normalized, ".exe")
+	base = strings.TrimSuffix(base, ".exe")
 
-	return normalized
+	return base
 }
 
 // isMatchingCommand checks if cmd matches the rule command
@@ -48,35 +41,7 @@ func isMatchingCommand(cmd, ruleCmd string) bool {
 	return normalizeCommand(cmd) == ruleCmd
 }
 
-// isShellInterpreter checks if the command is a shell interpreter
-func isShellInterpreter(cmd string) bool {
-	return slices.Contains(shellInterpreters, normalizeCommand(cmd))
-}
-
-// isEvalCommand checks if the command evaluates/sources code
-func isEvalCommand(cmd string) bool {
-	return slices.Contains(evalCommands, cmd)
-}
-
-// isXargsCommand checks if the command is xargs or similar
-func isXargsCommand(cmd string) bool {
-	normalized := normalizeCommand(cmd)
-	return normalized == "xargs" || strings.HasSuffix(normalized, "/xargs")
-}
-
-// isFindCommand checks if the command is find
-func isFindCommand(cmd string) bool {
-	normalized := normalizeCommand(cmd)
-	return normalized == "find" || strings.HasSuffix(normalized, "/find")
-}
-
-// isParallelCommand checks if the command is GNU parallel
-func isParallelCommand(cmd string) bool {
-	return strings.Contains(normalizeCommand(cmd), "parallel")
-}
-
 // isEchoCommand checks if the command is echo
 func isEchoCommand(cmd string) bool {
-	normalized := normalizeCommand(cmd)
-	return normalized == "echo" || strings.HasSuffix(normalized, "/echo")
+	return normalizeCommand(cmd) == "echo"
 }
