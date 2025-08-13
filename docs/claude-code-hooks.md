@@ -204,7 +204,7 @@ fi
       "hooks": [
         {
           "type": "command",
-          "command": "/usr/local/bin/bash-block -cmd=git -patterns=push"
+          "command": "/path/to/krmcbride-bash-block -cmd='git push'"
         }
       ]
     }
@@ -222,7 +222,7 @@ fi
       "hooks": [
         {
           "type": "command",
-          "command": "/usr/local/bin/file-format -cmd=goimports -ext=.go"
+          "command": "/path/to/krmcbride-file-format -cmd='goimports -w {FILEPATH}' -ext=.go"
         }
       ]
     }
