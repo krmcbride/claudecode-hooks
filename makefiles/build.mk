@@ -12,7 +12,7 @@ build: ## Build all hook binaries
 	@mkdir -p $(BUILD_DIR)
 	@$(foreach hook,$(HOOKS), \
 		printf "$(YELLOW)Building $(HOOK_PREFIX)$(word 1,$(subst :, ,$(hook)))...$(NC)\n"; \
-		go build -ldflags="-w -s" -o $(BUILD_DIR)/$(HOOK_PREFIX)$(word 1,$(subst :, ,$(hook))) ./$(word 2,$(subst :, ,$(hook))) || exit 1; \
+		go build -o $(BUILD_DIR)/$(HOOK_PREFIX)$(word 1,$(subst :, ,$(hook))) ./$(word 2,$(subst :, ,$(hook))) || exit 1; \
 		printf "$(GREEN)✓ Built $(BUILD_DIR)/$(HOOK_PREFIX)$(word 1,$(subst :, ,$(hook)))$(NC)\n"; \
 	)
 	@printf "$(GREEN)✓ All hooks built$(NC)\n"
@@ -23,7 +23,7 @@ define hook-build-template
 build-$(1): ## Build $(1) hook
 	@printf "$$(YELLOW)Building $$(HOOK_PREFIX)$(1)...$$(NC)\n"
 	@mkdir -p $$(BUILD_DIR)
-	@go build -ldflags="-w -s" -o $$(BUILD_DIR)/$$(HOOK_PREFIX)$(1) ./$(2)
+	@go build -o $$(BUILD_DIR)/$$(HOOK_PREFIX)$(1) ./$(2)
 	@printf "$$(GREEN)✓ Built $$(BUILD_DIR)/$$(HOOK_PREFIX)$(1)$$(NC)\n"
 endef
 
@@ -39,9 +39,10 @@ $(eval $(call hook-build-template,hook-logger,cmd/hook-logger))
 install: build ## Install all hook binaries to project .claude/hooks/ directory
 	@printf "$(YELLOW)Installing all hooks to project...$(NC)\n"
 	@mkdir -p $(HOOK_DIR)
+	# Remove existing hook first to avoid issues with in-place modification
 	@$(foreach hook,$(HOOKS), \
-		cp $(BUILD_DIR)/$(HOOK_PREFIX)$(word 1,$(subst :, ,$(hook))) $(HOOK_DIR)/$(HOOK_PREFIX)$(word 1,$(subst :, ,$(hook))); \
-		chmod +x $(HOOK_DIR)/$(HOOK_PREFIX)$(word 1,$(subst :, ,$(hook))); \
+		rm -f $(HOOK_DIR)/$(HOOK_PREFIX)$(word 1,$(subst :, ,$(hook))); \
+		install -m 755 $(BUILD_DIR)/$(HOOK_PREFIX)$(word 1,$(subst :, ,$(hook))) $(HOOK_DIR)/$(HOOK_PREFIX)$(word 1,$(subst :, ,$(hook))); \
 		printf "$(GREEN)✓ Installed $(HOOK_PREFIX)$(word 1,$(subst :, ,$(hook))) to $(HOOK_DIR)/$(NC)\n"; \
 	)
 
@@ -49,9 +50,10 @@ install: build ## Install all hook binaries to project .claude/hooks/ directory
 install-user: build ## Install all hook binaries to user ~/.claude/hooks/ directory
 	@printf "$(YELLOW)Installing all hooks to user config...$(NC)\n"
 	@mkdir -p $(USER_HOOK_DIR)
+	# Remove existing hook first to avoid issues with in-place modification
 	@$(foreach hook,$(HOOKS), \
-		cp $(BUILD_DIR)/$(HOOK_PREFIX)$(word 1,$(subst :, ,$(hook))) $(USER_HOOK_DIR)/$(HOOK_PREFIX)$(word 1,$(subst :, ,$(hook))); \
-		chmod +x $(USER_HOOK_DIR)/$(HOOK_PREFIX)$(word 1,$(subst :, ,$(hook))); \
+		rm -f $(USER_HOOK_DIR)/$(HOOK_PREFIX)$(word 1,$(subst :, ,$(hook))); \
+		install -m 755 $(BUILD_DIR)/$(HOOK_PREFIX)$(word 1,$(subst :, ,$(hook))) $(USER_HOOK_DIR)/$(HOOK_PREFIX)$(word 1,$(subst :, ,$(hook))); \
 		printf "$(GREEN)✓ Installed $(HOOK_PREFIX)$(word 1,$(subst :, ,$(hook))) to $(USER_HOOK_DIR)/$(NC)\n"; \
 	)
 
